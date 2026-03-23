@@ -1,0 +1,927 @@
+{
+  "name": "DENTAL 6 - Appointment Scheduling Form",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Programare Dental Studio",
+        "formDescription": "<p style='color:#555;'>Selectati data si ora dorita pentru programare. Va vom confirma disponibilitatea imediat.</p>",
+        "formFields": {
+          "values": [
+            {
+              "fieldType": "hiddenField",
+              "fieldName": "lead_id"
+            },
+            {
+              "fieldType": "hiddenField",
+              "fieldName": "source"
+            },
+            {
+              "fieldType": "hiddenField",
+              "fieldName": "language",
+              "fieldValue": "ro"
+            },
+            {
+              "fieldLabel": "Nume complet / Full name",
+              "fieldName": "name",
+              "placeholder": "ex. Ion Popescu",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Email",
+              "fieldType": "email",
+              "fieldName": "email",
+              "placeholder": "ex. ion@email.com",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Telefon / Phone",
+              "fieldName": "phone",
+              "placeholder": "ex. 0712 345 678",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Serviciu dorit / Desired procedure",
+              "fieldType": "dropdown",
+              "fieldName": "procedure",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Consultatie generala (30 min)"
+                  },
+                  {
+                    "option": "Detartraj (45 min)"
+                  },
+                  {
+                    "option": "Albire dentara (60 min)"
+                  },
+                  {
+                    "option": "Implant dentar - consultatie (60 min)"
+                  },
+                  {
+                    "option": "Ortodontie - consultatie (45 min)"
+                  },
+                  {
+                    "option": "Extractie (30 min)"
+                  },
+                  {
+                    "option": "Tratament canal (60 min)"
+                  },
+                  {
+                    "option": "Fatete dentare - consultatie (45 min)"
+                  },
+                  {
+                    "option": "Control periodic (30 min)"
+                  },
+                  {
+                    "option": "Altele (30 min)"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Data dorita / Preferred date",
+              "fieldType": "date",
+              "fieldName": "preferred_date",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Ora dorita / Preferred time",
+              "fieldType": "dropdown",
+              "fieldName": "preferred_time",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "09:00"
+                  },
+                  {
+                    "option": "09:30"
+                  },
+                  {
+                    "option": "10:00"
+                  },
+                  {
+                    "option": "10:30"
+                  },
+                  {
+                    "option": "11:00"
+                  },
+                  {
+                    "option": "11:30"
+                  },
+                  {
+                    "option": "12:00"
+                  },
+                  {
+                    "option": "12:30"
+                  },
+                  {
+                    "option": "13:00"
+                  },
+                  {
+                    "option": "13:30"
+                  },
+                  {
+                    "option": "14:00"
+                  },
+                  {
+                    "option": "14:30"
+                  },
+                  {
+                    "option": "15:00"
+                  },
+                  {
+                    "option": "15:30"
+                  },
+                  {
+                    "option": "16:00"
+                  },
+                  {
+                    "option": "16:30"
+                  },
+                  {
+                    "option": "17:00"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Observatii / Notes",
+              "fieldType": "textarea",
+              "fieldName": "notes",
+              "placeholder": "Orice informatii suplimentare..."
+            }
+          ]
+        },
+        "responseMode": "lastNode",
+        "options": {
+          "appendAttribution": false,
+          "buttonLabel": "Programeaza / Book Appointment",
+          "path": "dental-schedule",
+          "respondWithOptions": {
+            "values": {
+              "formSubmittedText": "Va multumim! Programarea dumneavoastra este in curs de procesare. Veti primi o confirmare prin email. / Thank you! Your appointment is being processed. You will receive a confirmation email."
+            }
+          },
+          "useWorkflowTimezone": true
+        }
+      },
+      "id": "form-trigger",
+      "name": "Appointment Scheduling Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.5,
+      "position": [
+        256,
+        400
+      ],
+      "webhookId": "ca21e1df-12df-43f5-b4c0-00422084f420"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process form submission and generate appointment data\nconst data = $input.first().json;\n\n// Generate unique appointment ID\nconst appointmentId = 'APT-' + Date.now().toString(36).toUpperCase();\n\n// Extract procedure name and duration from dropdown value\nconst procedureRaw = data.procedure || 'Consultatie generala (30 min)';\nconst procedureMatch = procedureRaw.match(/^(.+?)\\s*\\((\\d+)\\s*min\\)$/);\nconst procedureName = procedureMatch ? procedureMatch[1].trim() : procedureRaw;\nconst durationMinutes = procedureMatch ? parseInt(procedureMatch[2]) : 30;\n\n// Calculate end time based on procedure duration\nconst startTime = data.preferred_time || '09:00';\nconst [startH, startM] = startTime.split(':').map(Number);\nconst endTotalMinutes = startH * 60 + startM + durationMinutes;\nconst endH = Math.floor(endTotalMinutes / 60);\nconst endM = endTotalMinutes % 60;\nconst endTime = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;\n\n// Normalize date\nconst preferredDate = data.preferred_date || '';\n\n// Determine language\nconst language = data.language || 'ro';\n\nreturn [{\n  json: {\n    appointment_id: appointmentId,\n    lead_id: data.lead_id || '',\n    source: data.source || 'direct_form',\n    name: data.name || '',\n    email: (data.email || '').toLowerCase().trim(),\n    phone: String(data.phone || '').replace(/[^0-9+]/g, ''),\n    procedure: procedureName,\n    procedure_full: procedureRaw,\n    duration_minutes: durationMinutes,\n    date: preferredDate,\n    time_start: startTime,\n    time_end: endTime,\n    notes: data.notes || '',\n    language: language,\n    status: 'pending_confirmation',\n    created_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "process-booking",
+      "name": "Process Booking Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1PiSRv8QQmeQGPdcHLVQ7KRJuAbAxoLElzDa8B52nP_4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Appointments"
+        },
+        "filtersUI": {
+          "values": []
+        },
+        "options": {}
+      },
+      "id": "check-appointments",
+      "name": "Check Existing Appointments",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        704,
+        400
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JxQN1tszvOquCqhF",
+          "name": "Dental Clinic CRM"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if the requested slot is available (procedure-duration aware)\nconst booking = $('Process Booking Request').first().json;\nconst existingAppointments = $input.all().map(i => i.json);\n\nconst requestedDate = booking.date;\nconst requestedStart = booking.time_start;\nconst requestedEnd = booking.time_end;\nconst requestedDuration = booking.duration_minutes;\n\nfunction timeToMinutes(t) {\n  if (!t || !t.includes(':')) return 0;\n  const [h, m] = t.split(':').map(Number);\n  return h * 60 + m;\n}\n\nconst reqStartMin = timeToMinutes(requestedStart);\nconst reqEndMin = timeToMinutes(requestedEnd);\n\n// Filter appointments on the same date that are active\nconst sameDayAppts = existingAppointments.filter(apt => {\n  return apt.date === requestedDate && \n         apt.status !== 'cancelled' && \n         apt.status !== 'no-show';\n});\n\n// Check for time overlaps using duration-aware logic\nlet conflicting = [];\nfor (const apt of sameDayAppts) {\n  const aptStart = timeToMinutes(apt.time_start || apt.time);\n  const aptDuration = parseInt(apt.duration_minutes) || 30;\n  const aptEnd = aptStart + aptDuration;\n  \n  if (reqStartMin < aptEnd && reqEndMin > aptStart) {\n    conflicting.push(apt);\n  }\n}\n\nconst isAvailable = conflicting.length === 0;\n\n// Generate alternative slots if not available\nlet alternatives = [];\nif (!isAvailable) {\n  const allSlots = ['09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00'];\n  \n  for (const slot of allSlots) {\n    const slotStart = timeToMinutes(slot);\n    const slotEnd = slotStart + requestedDuration;\n    \n    if (slotEnd > 18 * 60) continue;\n    \n    let slotFree = true;\n    for (const apt of sameDayAppts) {\n      const aptStart = timeToMinutes(apt.time_start || apt.time);\n      const aptDuration = parseInt(apt.duration_minutes) || 30;\n      const aptEnd = aptStart + aptDuration;\n      \n      if (slotStart < aptEnd && slotEnd > aptStart) {\n        slotFree = false;\n        break;\n      }\n    }\n    \n    if (slotFree && slot !== requestedStart) {\n      alternatives.push(slot);\n    }\n    \n    if (alternatives.length >= 3) break;\n  }\n}\n\nreturn [{\n  json: {\n    ...booking,\n    available: isAvailable,\n    conflicting_count: conflicting.length,\n    alternatives: alternatives,\n    alternatives_text: alternatives.join(', ')\n  }\n}];"
+      },
+      "id": "verify-availability",
+      "name": "Verify Slot Available",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        928,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "avail-check",
+              "leftValue": "={{ $json.available }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-available",
+      "name": "Slot Available?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1152,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1PiSRv8QQmeQGPdcHLVQ7KRJuAbAxoLElzDa8B52nP_4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Appointments"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "appointment_id": "={{ $json.appointment_id }}",
+            "lead_id": "={{ $json.lead_id }}",
+            "name": "={{ $json.name }}",
+            "email": "={{ $json.email }}",
+            "phone": "={{ $json.phone }}",
+            "procedure": "={{ $json.procedure }}",
+            "duration_minutes": "={{ $json.duration_minutes }}",
+            "date": "={{ $json.date }}",
+            "time_start": "={{ $json.time_start }}",
+            "time_end": "={{ $json.time_end }}",
+            "status": "confirmed",
+            "created_at": "={{ $json.created_at }}",
+            "notes": "={{ $json.notes }}",
+            "source": "={{ $json.source }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "appointment_id",
+              "displayName": "appointment_id",
+              "type": "string",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lead_id",
+              "displayName": "lead_id",
+              "type": "string",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "type": "string",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "type": "string",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "type": "string",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "procedure",
+              "displayName": "procedure",
+              "type": "string",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "duration_minutes",
+              "displayName": "duration_minutes",
+              "type": "string",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "date",
+              "displayName": "date",
+              "type": "string",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "time_start",
+              "displayName": "time_start",
+              "type": "string",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "time_end",
+              "displayName": "time_end",
+              "type": "string",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "type": "string",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "type": "string",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "type": "string",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "type": "string",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED"
+        }
+      },
+      "id": "create-appointment",
+      "name": "Create Appointment",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1392,
+        304
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JxQN1tszvOquCqhF",
+          "name": "Dental Clinic CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1PiSRv8QQmeQGPdcHLVQ7KRJuAbAxoLElzDa8B52nP_4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Leads"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "lead_id": "={{ $json.lead_id }}",
+            "status": "booked"
+          },
+          "matchingColumns": [
+            "lead_id"
+          ],
+          "schema": [
+            {
+              "id": "lead_id",
+              "displayName": "lead_id",
+              "type": "string",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "type": "string",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED"
+        }
+      },
+      "id": "update-lead-status",
+      "name": "Update Lead Status to Booked",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1600,
+        304
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JxQN1tszvOquCqhF",
+          "name": "Dental Clinic CRM"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "primary"
+        },
+        "start": "={{ $json.date }}T{{ $json.time_start }}:00",
+        "end": "={{ $json.date }}T{{ $json.time_end }}:00",
+        "additionalFields": {
+          "description": "=Pacient: {{ $json.name }}\nTelefon: {{ $json.phone }}\nEmail: {{ $json.email }}\nProcedura: {{ $json.procedure }} ({{ $json.duration_minutes }} min)\nNote: {{ $json.notes || 'Fara note' }}\n\nID Programare: {{ $json.appointment_id }}\nID Lead: {{ $json.lead_id }}",
+          "location": "Dental Studio",
+          "summary": "=Programare: {{ $json.name }} - {{ $json.procedure }}"
+        }
+      },
+      "id": "create-calendar-event",
+      "name": "Create Google Calendar Event",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        1824,
+        304
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "fromEmail": "lucian.ianus05@gmail.com",
+        "toEmail": "lucian.ianus05@gmail.com",
+        "subject": "=Programare noua: {{ $json.name }} - {{ $json.procedure }} - {{ $json.date }} {{ $json.time_start }}",
+        "html": "=<!DOCTYPE html>\n<html>\n<head><meta charset=\"UTF-8\"></head>\n<body style=\"font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333;\">\n  <div style=\"max-width: 600px; margin: 0 auto; padding: 20px;\">\n    <div style=\"background: linear-gradient(135deg, #2c5aa0 0%, #1e3a5f 100%); color: white; padding: 25px; border-radius: 8px 8px 0 0;\">\n      <h1 style=\"margin: 0; font-size: 22px;\">Programare Noua Confirmata</h1>\n      <p style=\"margin: 8px 0 0; opacity: 0.9; font-size: 14px;\">Un pacient a programat o vizita prin formularul online</p>\n    </div>\n    <div style=\"background: #ffffff; padding: 25px; border: 1px solid #e0e0e0;\">\n      <div style=\"padding: 12px 0; border-bottom: 1px solid #f0f0f0;\">\n        <div style=\"color: #666; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;\">Pacient</div>\n        <div style=\"color: #333; font-size: 16px; font-weight: 600; margin-top: 4px;\">{{ $json.name }}</div>\n      </div>\n      <div style=\"padding: 12px 0; border-bottom: 1px solid #f0f0f0;\">\n        <div style=\"color: #666; font-size: 13px; text-transform: uppercase;\">Data si ora</div>\n        <div style=\"color: #2c5aa0; font-size: 18px; font-weight: 600; margin-top: 4px;\">{{ $json.date }} | {{ $json.time_start }} - {{ $json.time_end }}</div>\n      </div>\n      <div style=\"padding: 12px 0; border-bottom: 1px solid #f0f0f0;\">\n        <div style=\"color: #666; font-size: 13px; text-transform: uppercase;\">Procedura</div>\n        <div style=\"color: #333; font-size: 15px; font-weight: 500; margin-top: 4px;\">{{ $json.procedure }} ({{ $json.duration_minutes }} min)</div>\n      </div>\n      <div style=\"padding: 12px 0; border-bottom: 1px solid #f0f0f0;\">\n        <div style=\"color: #666; font-size: 13px; text-transform: uppercase;\">Telefon</div>\n        <div style=\"color: #333; font-size: 15px; font-weight: 500; margin-top: 4px;\">{{ $json.phone }}</div>\n      </div>\n      <div style=\"padding: 12px 0; border-bottom: 1px solid #f0f0f0;\">\n        <div style=\"color: #666; font-size: 13px; text-transform: uppercase;\">Email</div>\n        <div style=\"color: #333; font-size: 15px; font-weight: 500; margin-top: 4px;\">{{ $json.email }}</div>\n      </div>\n      <div style=\"padding: 12px 0;\">\n        <div style=\"color: #666; font-size: 13px; text-transform: uppercase;\">Observatii</div>\n        <div style=\"color: #333; font-size: 15px; margin-top: 4px;\">{{ $json.notes || 'Fara observatii' }}</div>\n      </div>\n      <div style=\"background: #e8f5e9; border-left: 4px solid #4caf50; padding: 15px; margin: 20px 0; border-radius: 0 8px 8px 0;\">\n        <strong>Status: CONFIRMAT</strong><br>\n        <span style=\"font-size: 13px; color: #555;\">Pacientul a programat direct prin formularul online.</span>\n      </div>\n      <div style=\"background: #e3f2fd; border-left: 4px solid #2196f3; padding: 15px; margin: 10px 0; border-radius: 0 8px 8px 0;\">\n        <a href=\"https://docs.google.com/spreadsheets/d/1PiSRv8QQmeQGPdcHLVQ7KRJuAbAxoLElzDa8B52nP_4/edit\" style=\"color: #1976d2; font-weight: 600; text-decoration: none;\">Deschide CRM-ul Dental Clinic</a>\n      </div>\n    </div>\n    <div style=\"background: #f8f9fa; padding: 15px 25px; border-radius: 0 0 8px 8px; font-size: 12px; color: #666; border: 1px solid #e0e0e0; border-top: none;\">\n      ID Programare: {{ $json.appointment_id }} | ID Lead: {{ $json.lead_id }} | Sursa: {{ $json.source }}\n    </div>\n  </div>\n</body>\n</html>",
+        "options": {}
+      },
+      "id": "email-receptionist",
+      "name": "Email Receptionist - New Appointment",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        2048,
+        304
+      ],
+      "webhookId": "a0355f31-825d-4724-ac60-b7cbdd98ce80",
+      "credentials": {
+        "smtp": {
+          "id": "5LzvM8OsCy15sEku",
+          "name": "SMTP account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "recipientPhoneNumber": "={{ $json.phone }}",
+        "textBody": "=Programare confirmata la Dental Studio!\n\nData: {{ $json.date }}\nOra: {{ $json.time_start }} - {{ $json.time_end }}\nProcedura: {{ $json.procedure }} ({{ $json.duration_minutes }} min)\n\nVa rugam sa ajungeti cu 10 minute inainte.\nPentru anulare sau reprogramare, contactati-ne la telefon.\n\nVa multumim!\nEchipa Dental Studio",
+        "additionalFields": {}
+      },
+      "id": "whatsapp-booking",
+      "name": "WhatsApp Booking (Enable When Ready)",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        2928,
+        304
+      ],
+      "webhookId": "bf283fc1-e91b-42ab-b935-3282a1585b7e",
+      "disabled": true,
+      "notes": "DISABLED - Enable when WhatsApp Business Cloud API credentials are configured.\n\nSetup steps:\n1. Create Meta Business account at business.facebook.com\n2. Set up WhatsApp Business API\n3. Register a phone number\n4. In n8n: Settings > Credentials > Add WhatsApp Business Cloud\n5. Enable this node and set phoneNumberId"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "You are a friendly dental clinic assistant writing appointment confirmation emails.\n\nAppointment Details:\n- Patient Name: {{ $json.name }}\n- Date: {{ $json.date }}\n- Time: {{ $json.time_start }} - {{ $json.time_end }}\n- Procedure: {{ $json.procedure }} ({{ $json.duration_minutes }} minutes)\n- Language: {{ $json.language }}\n\nWrite a warm, personalized confirmation email in {{ $json.language === 'en' ? 'English' : 'Romanian' }}.\n\nInclude:\n1. Friendly greeting using their name\n2. Confirmation of appointment details\n3. Relevant preparation tips for their specific procedure\n4. A warm closing\n\nReturn ONLY a JSON object:\n{\n  \"subject\": \"email subject line\",\n  \"body\": \"full email body in HTML format with nice styling\"\n}",
+        "options": {}
+      },
+      "id": "ai-personalize-confirmation",
+      "name": "AI Personalize Confirmation",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [
+        2272,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nlet aiResponse = input.output || input.text || '';\n\nlet emailData = { subject: 'Appointment Confirmed - Dental Studio', body: '' };\ntry {\n  const jsonMatch = aiResponse.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    emailData = JSON.parse(jsonMatch[0]);\n  }\n} catch (e) {\n  emailData.body = aiResponse;\n}\n\nreturn [{\n  json: {\n    ...input,\n    ai_subject: emailData.subject,\n    ai_body: emailData.body\n  }\n}];"
+      },
+      "id": "parse-ai-confirmation",
+      "name": "Parse AI Confirmation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2480,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "lucian.ianus05@gmail.com",
+        "toEmail": "={{ $json.email }}",
+        "subject": "={{ $json.ai_subject }}",
+        "html": "={{ $json.ai_body }}",
+        "options": {}
+      },
+      "id": "send-ai-confirmation",
+      "name": "Send AI Confirmation",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        2704,
+        304
+      ],
+      "webhookId": "fdfcac1c-3b2d-445b-8a6f-76d0114a0a8e"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "You are a helpful dental clinic scheduling assistant. A patient tried to book an appointment but their preferred time is unavailable.\n\nPatient Details:\n- Name: {{ $json.name }}\n- Language: {{ $json.language }}\n- Requested Date: {{ $json.date }}\n- Requested Time: {{ $json.time_start }}\n- Procedure: {{ $json.procedure }} ({{ $json.duration_minutes }} minutes)\n- Available Alternatives: {{ $json.alternatives_text || 'None on this date' }}\n\nWrite a friendly, apologetic email in {{ $json.language === 'en' ? 'English' : 'Romanian' }} that:\n1. Apologizes that their preferred slot is not available\n2. If alternatives are available, suggest them enthusiastically\n3. If no alternatives, suggest checking other dates\n4. Include a link to rebook: https://zappai.app.n8n.cloud/form/dental-schedule\n5. Keep it warm and helpful\n\nReturn ONLY a JSON object:\n{\n  \"subject\": \"email subject line\",\n  \"body\": \"full email body in HTML format\"\n}",
+        "options": {}
+      },
+      "id": "ai-suggest-alternatives",
+      "name": "AI Suggest Alternatives",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [
+        1392,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nlet aiResponse = input.output || input.text || '';\n\nlet emailData = { subject: 'Slot Not Available - Dental Studio', body: '' };\ntry {\n  const jsonMatch = aiResponse.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    emailData = JSON.parse(jsonMatch[0]);\n  }\n} catch (e) {\n  emailData.body = aiResponse;\n}\n\nreturn [{\n  json: {\n    ...input,\n    ai_subject: emailData.subject,\n    ai_body: emailData.body\n  }\n}];"
+      },
+      "id": "parse-ai-unavailable",
+      "name": "Parse AI Unavailable",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "lucian.ianus05@gmail.com",
+        "toEmail": "={{ $json.email }}",
+        "subject": "={{ $json.ai_subject }}",
+        "html": "={{ $json.ai_body }}",
+        "options": {}
+      },
+      "id": "send-ai-unavailable",
+      "name": "Send AI Unavailable Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1824,
+        560
+      ],
+      "webhookId": "27761161-420b-4121-8c1b-2a7ddf8c1063"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gpt-5.2"
+        },
+        "builtInTools": {},
+        "options": {
+          "temperature": 0.7
+        }
+      },
+      "id": "openai-scheduling",
+      "name": "OpenAI GPT-5.2 Confirmation",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        2272,
+        144
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "ZfoYM2nWjQkVXuQE",
+          "name": "Ai Shorts"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gpt-5.2"
+        },
+        "builtInTools": {},
+        "options": {
+          "temperature": 0.7
+        }
+      },
+      "id": "openai-unavailable",
+      "name": "OpenAI GPT-5.2 Alternatives",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1392,
+        400
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "ZfoYM2nWjQkVXuQE",
+          "name": "Ai Shorts"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Appointment Scheduling Form": {
+      "main": [
+        [
+          {
+            "node": "Process Booking Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Booking Request": {
+      "main": [
+        [
+          {
+            "node": "Check Existing Appointments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Existing Appointments": {
+      "main": [
+        [
+          {
+            "node": "Verify Slot Available",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Slot Available": {
+      "main": [
+        [
+          {
+            "node": "Slot Available?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slot Available?": {
+      "main": [
+        [
+          {
+            "node": "Create Appointment",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Suggest Alternatives",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Appointment": {
+      "main": [
+        [
+          {
+            "node": "Update Lead Status to Booked",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Lead Status to Booked": {
+      "main": [
+        [
+          {
+            "node": "Create Google Calendar Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Google Calendar Event": {
+      "main": [
+        [
+          {
+            "node": "Email Receptionist - New Appointment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Receptionist - New Appointment": {
+      "main": [
+        [
+          {
+            "node": "AI Personalize Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Personalize Confirmation": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Confirmation": {
+      "main": [
+        [
+          {
+            "node": "Send AI Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send AI Confirmation": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp Booking (Enable When Ready)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Suggest Alternatives": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Unavailable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Unavailable": {
+      "main": [
+        [
+          {
+            "node": "Send AI Unavailable Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI GPT-5.2 Confirmation": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Personalize Confirmation",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI GPT-5.2 Alternatives": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Suggest Alternatives",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Bucharest",
+    "errorWorkflow": "xXxInMLlLr07vHfJ",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "pinData": {},
+  "triggerCount": 0,
+  "meta": null
+}

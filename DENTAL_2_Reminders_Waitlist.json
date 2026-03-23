@@ -1,0 +1,1330 @@
+{
+  "name": "DENTAL 2 - Reminders & Waitlist",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "dental/appointment/confirmed",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-confirmed",
+      "name": "Webhook Appointment Confirmed",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        256,
+        208
+      ],
+      "webhookId": "dental-apt-confirmed"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "dental/appointment/confirm",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-confirm",
+      "name": "Webhook Confirm",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        256,
+        512
+      ],
+      "webhookId": "dental-apt-confirm"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "dental/appointment/cancel",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-cancel",
+      "name": "Webhook Cancel",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        256,
+        800
+      ],
+      "webhookId": "dental-apt-cancel"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "dental/booking/website",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "website-webhook",
+      "name": "Website Booking Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        256,
+        0
+      ],
+      "webhookId": "dental-booking-website"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize appointment data from webhook\nconst item = $input.first().json;\nconst body = item.body || item;\n\n// Generate UUID\nconst uuid = 'apt_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 6);\n\n// Normalize phone\nlet phone = (body.patient_phone || body.phone || '').toString();\nconst hasPlus = phone.startsWith('+');\nphone = phone.replace(/\\D/g, '');\nif (hasPlus && !phone.startsWith('+')) phone = '+' + phone;\n\n// Normalize email\nconst email = (body.patient_email || body.email || '').toString().toLowerCase().trim();\n\nreturn [{\n  json: {\n    appointment_id: uuid,\n    patient_name: body.patient_name || body.name || '',\n    patient_email: email,\n    patient_phone: phone,\n    appointment_time: body.appointment_datetime || body.appointment_time || '',\n    procedure: body.service || body.procedure || '',\n    status: 'booked_pending',\n    created_at: new Date().toISOString(),\n    language: 'ro'\n  }\n}];"
+      },
+      "id": "prep-appointment",
+      "name": "Prepare Appointment Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        464,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1PiSRv8QQmeQGPdcHLVQ7KRJuAbAxoLElzDa8B52nP_4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Appointments"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {},
+        "authentication": "oAuth2"
+      },
+      "id": "add-appointment",
+      "name": "Add Appointment",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        672,
+        112
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JxQN1tszvOquCqhF",
+          "name": "Dental Clinic CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "info@dentpro.ro",
+        "toEmail": "={{ $json.patient_email }}",
+        "subject": "=Confirmare programare - DentPro Clinic",
+        "options": {},
+        "sendTo": "={{ $json.patient_email }}",
+        "emailFormat": "html",
+        "message": "<div style=\"font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;\">\n<h2 style=\"color: #2563eb;\">✅ Confirmare Programare</h2>\n<p>Dragă {{ $json.patient_name }},</p>\n<p>Programarea dumneavoastră a fost înregistrată cu succes!</p>\n<div style=\"background: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;\">\n<p><strong>📅 Data:</strong> {{ $json.appointment_time }}</p>\n<p><strong>🦷 Procedura:</strong> {{ $json.procedure }}</p>\n<p><strong>📍 Locație:</strong> DentPro Clinic</p>\n</div>\n<p>Vă rugăm să confirmați prezența răspunzând la acest email sau apelând la recepție.</p>\n<p>Cu stimă,<br><strong>Echipa DentPro Clinic</strong></p>\n</div>"
+      },
+      "id": "send-confirm-email",
+      "name": "Send Booking Confirmation",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        880,
+        112
+      ],
+      "webhookId": "f0727282-f046-4ab4-a93e-ab90f4463870",
+      "credentials": {
+        "smtp": {
+          "id": "5LzvM8OsCy15sEku",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calculate minutes to wait until 2h before appointment\nconst input = $input.first().json;\n\nconst appointmentTime = input.appointment_time;\nif (!appointmentTime) {\n  return [{ json: { ...input, wait_minutes: 1, skip_reminder: true } }];\n}\n\nconst aptTime = DateTime.fromISO(appointmentTime).setZone('Europe/Bucharest');\nconst reminderTime = aptTime.minus({ hours: 2 });\nconst now = DateTime.now().setZone('Europe/Bucharest');\n\nlet waitMinutes = reminderTime.diff(now, 'minutes').minutes;\n\n// If reminder time already passed, skip the reminder\nif (waitMinutes < 1) {\n  return [{ json: { ...input, wait_minutes: 1, skip_reminder: true } }];\n}\n\nreturn [{\n  json: {\n    ...input,\n    wait_minutes: Math.round(waitMinutes),\n    reminder_scheduled_for: reminderTime.toISO(),\n    skip_reminder: false\n  }\n}];"
+      },
+      "id": "calc-wait-time",
+      "name": "Calculate Wait Time",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1088,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "amount": "={{ $json.wait_minutes }}",
+        "unit": "minutes"
+      },
+      "id": "wait-2h",
+      "name": "Wait Until 2h Before",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1296,
+        112
+      ],
+      "webhookId": "de0fc4da-5b31-4b6e-a72c-7067b7099feb"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "leftValue": ""
+          },
+          "combinator": "or",
+          "conditions": [
+            {
+              "id": "skip-check",
+              "leftValue": "={{ $json.skip_reminder }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "check-skip-reminder",
+      "name": "Skip Reminder?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1504,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1PiSRv8QQmeQGPdcHLVQ7KRJuAbAxoLElzDa8B52nP_4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Appointments"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "appointment_id",
+              "lookupValue": "={{ $json.appointment_id }}"
+            }
+          ]
+        },
+        "options": {},
+        "authentication": "oAuth2"
+      },
+      "id": "get-apt-status",
+      "name": "Get Appointment Status",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1712,
+        208
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JxQN1tszvOquCqhF",
+          "name": "Dental Clinic CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "leftValue": ""
+          },
+          "combinator": "or",
+          "conditions": [
+            {
+              "id": "confirmed-check",
+              "leftValue": "={{ $json.confirmed_at }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "isNotEmpty",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "check-confirmed",
+      "name": "Is Confirmed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1920,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "info@dentpro.ro",
+        "toEmail": "={{ $json.patient_email }}",
+        "subject": "=Reminder: Programare in 2 ore - DentPro Clinic",
+        "options": {},
+        "sendTo": "={{ $json.patient_email }}",
+        "emailFormat": "html",
+        "message": "<div style=\"font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;\">\n<h2 style=\"color: #f59e0b;\">⏰ Reminder: Programare în 2 ore!</h2>\n<p>Dragă {{ $json.patient_name }},</p>\n<p>Vă reamintim că aveți o programare în curând.</p>\n<div style=\"background: #fef3c7; padding: 15px; border-radius: 8px; margin: 20px 0;\">\n<p><strong>📅 Data:</strong> {{ $json.appointment_time }}</p>\n<p><strong>🦷 Procedura:</strong> {{ $json.procedure }}</p>\n</div>\n<p>Vă așteptăm cu drag!</p>\n<p>Cu stimă,<br><strong>Echipa DentPro Clinic</strong></p>\n</div>"
+      },
+      "id": "email-2h",
+      "name": "Email 2h Reminder",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        2128,
+        304
+      ],
+      "webhookId": "0d643ac0-f9bc-4451-bf97-d374f3e87388",
+      "credentials": {
+        "smtp": {
+          "id": "5LzvM8OsCy15sEku",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1PiSRv8QQmeQGPdcHLVQ7KRJuAbAxoLElzDa8B52nP_4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Appointments"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "reminder_2h_sent": "={{ DateTime.now().setZone('Europe/Bucharest').toISO() }}",
+            "row_number": 0
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "appointment_id",
+              "displayName": "appointment_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "lead_id",
+              "displayName": "lead_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "patient_name",
+              "displayName": "patient_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "patient_email",
+              "displayName": "patient_email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "patient_phone",
+              "displayName": "patient_phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "appointment_time",
+              "displayName": "appointment_time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "procedure",
+              "displayName": "procedure",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "reminder_48h_sent",
+              "displayName": "reminder_48h_sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "reminder_24h_sent",
+              "displayName": "reminder_24h_sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "reminder_2h_sent",
+              "displayName": "reminder_2h_sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "confirmed_at",
+              "displayName": "confirmed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "cancelled_at",
+              "displayName": "cancelled_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "language",
+              "displayName": "language",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "confirm_token",
+              "displayName": "confirm_token",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED"
+        },
+        "authentication": "oAuth2"
+      },
+      "id": "update-2h-sent",
+      "name": "Update 2h Sent",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2336,
+        304
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JxQN1tszvOquCqhF",
+          "name": "Dental Clinic CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "info@dentpro.ro",
+        "toEmail": "admin@dentpro.ro",
+        "subject": "=ALERTA Pacient NECONFIRMAT - {{ $json.patient_name }}",
+        "options": {},
+        "sendTo": "={{ $env.ALERT_EMAIL || \"admin@clinic.ro\" }}",
+        "emailFormat": "html",
+        "message": "<div style=\"font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;\">\n<h2 style=\"color: #dc2626;\">⚠️ ALERTĂ: Pacient Neconfirmat</h2>\n<p>Următorul pacient NU a confirmat programarea:</p>\n<div style=\"background: #fef2f2; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #dc2626;\">\n<p><strong>👤 Pacient:</strong> {{ $json.patient_name }}</p>\n<p><strong>📧 Email:</strong> {{ $json.patient_email }}</p>\n<p><strong>📱 Telefon:</strong> {{ $json.patient_phone }}</p>\n<p><strong>📅 Programare:</strong> {{ $json.appointment_time }}</p>\n</div>\n<p>Vă rugăm să contactați pacientul pentru confirmare.</p>\n</div>"
+      },
+      "id": "email-staff-unconfirmed",
+      "name": "Email Staff Unconfirmed",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        2544,
+        304
+      ],
+      "webhookId": "abc793d5-1aa8-4ca3-ae4a-ffde49c349a6",
+      "credentials": {
+        "smtp": {
+          "id": "5LzvM8OsCy15sEku",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "response-confirmed",
+      "name": "Response Confirmed",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2128,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1PiSRv8QQmeQGPdcHLVQ7KRJuAbAxoLElzDa8B52nP_4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Appointments"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "confirm_token",
+              "lookupValue": "={{ $json.query.token || $json.body.token }}"
+            }
+          ]
+        },
+        "options": {},
+        "authentication": "oAuth2"
+      },
+      "id": "get-apt-confirm",
+      "name": "Get Appointment for Confirm",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        464,
+        512
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JxQN1tszvOquCqhF",
+          "name": "Dental Clinic CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1PiSRv8QQmeQGPdcHLVQ7KRJuAbAxoLElzDa8B52nP_4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Appointments"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "booked_confirmed",
+            "confirmed_at": "={{ DateTime.now().setZone('Europe/Bucharest').toISO() }}"
+          }
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED"
+        },
+        "authentication": "oAuth2"
+      },
+      "id": "update-confirmed",
+      "name": "Mark as Confirmed",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        672,
+        512
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JxQN1tszvOquCqhF",
+          "name": "Dental Clinic CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "response-confirm",
+      "name": "Response Confirm",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        880,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1PiSRv8QQmeQGPdcHLVQ7KRJuAbAxoLElzDa8B52nP_4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Appointments"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "confirm_token",
+              "lookupValue": "={{ $json.query.token || $json.body.token }}"
+            }
+          ]
+        },
+        "options": {},
+        "authentication": "oAuth2"
+      },
+      "id": "get-apt-cancel",
+      "name": "Get Appointment for Cancel",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        464,
+        800
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JxQN1tszvOquCqhF",
+          "name": "Dental Clinic CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1PiSRv8QQmeQGPdcHLVQ7KRJuAbAxoLElzDa8B52nP_4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Appointments"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "cancelled",
+            "cancelled_at": "={{ DateTime.now().setZone('Europe/Bucharest').toISO() }}",
+            "row_number": 0
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "appointment_id",
+              "displayName": "appointment_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "lead_id",
+              "displayName": "lead_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "patient_name",
+              "displayName": "patient_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "patient_email",
+              "displayName": "patient_email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "patient_phone",
+              "displayName": "patient_phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "appointment_time",
+              "displayName": "appointment_time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "procedure",
+              "displayName": "procedure",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "reminder_48h_sent",
+              "displayName": "reminder_48h_sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "reminder_24h_sent",
+              "displayName": "reminder_24h_sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "reminder_2h_sent",
+              "displayName": "reminder_2h_sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "confirmed_at",
+              "displayName": "confirmed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "cancelled_at",
+              "displayName": "cancelled_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "language",
+              "displayName": "language",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "confirm_token",
+              "displayName": "confirm_token",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED"
+        },
+        "authentication": "oAuth2"
+      },
+      "id": "update-cancelled",
+      "name": "Mark as Cancelled",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        672,
+        800
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JxQN1tszvOquCqhF",
+          "name": "Dental Clinic CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "info@dentpro.ro",
+        "toEmail": "admin@dentpro.ro",
+        "subject": "=Programare ANULATA - {{ $json.patient_name }}",
+        "options": {},
+        "sendTo": "={{ $env.ALERT_EMAIL || \"admin@clinic.ro\" }}",
+        "emailFormat": "html",
+        "message": "<div style=\"font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;\">\n<h2 style=\"color: #dc2626;\">❌ Programare ANULATĂ</h2>\n<p>Un pacient a anulat programarea:</p>\n<div style=\"background: #fef2f2; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #dc2626;\">\n<p><strong>👤 Pacient:</strong> {{ $json.patient_name }}</p>\n<p><strong>📧 Email:</strong> {{ $json.patient_email }}</p>\n<p><strong>📱 Telefon:</strong> {{ $json.patient_phone }}</p>\n<p><strong>📅 Programare anulată:</strong> {{ $json.appointment_time }}</p>\n</div>\n<p>Sistemul va verifica lista de așteptare pentru a oferi locul disponibil.</p>\n</div>"
+      },
+      "id": "email-staff-cancel",
+      "name": "Email Staff Cancel Alert",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        880,
+        800
+      ],
+      "webhookId": "2515f063-29bf-4491-808d-a67b66a9b828",
+      "credentials": {
+        "smtp": {
+          "id": "5LzvM8OsCy15sEku",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1PiSRv8QQmeQGPdcHLVQ7KRJuAbAxoLElzDa8B52nP_4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Waitlist"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "status",
+              "lookupValue": "waiting"
+            }
+          ]
+        },
+        "options": {},
+        "authentication": "oAuth2"
+      },
+      "id": "get-waitlist",
+      "name": "Get Waitlist",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1088,
+        800
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JxQN1tszvOquCqhF",
+          "name": "Dental Clinic CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "leftValue": ""
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "waitlist-check",
+              "leftValue": "={{ $json.patient_name }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "isNotEmpty",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-has-waitlist",
+      "name": "Has Waitlist?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1296,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "lucian.ianus05@gmail.com",
+        "toEmail": "={{ $json.email }}",
+        "subject": "=Loc disponibil la DentPro Clinic!",
+        "options": {},
+        "sendTo": "={{ $json.email }}",
+        "emailFormat": "html",
+        "message": "<div style=\"font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;\">\n<h2 style=\"color: #10b981;\">🎉 Loc Disponibil!</h2>\n<p>Dragă {{ $json.patient_name }},</p>\n<p>Vești bune! S-a eliberat un loc pentru tratamentul dorit.</p>\n<div style=\"background: #d1fae5; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #10b981;\">\n<p><strong>📅 Data disponibilă:</strong> {{ $json.slot_datetime }}</p>\n<p><strong>🦷 Procedura:</strong> {{ $json.procedure }}</p>\n</div>\n<p>Dacă doriți să rezervați acest loc, vă rugăm să ne contactați urgent la recepție sau să răspundeți la acest email.</p>\n<p>Locul este disponibil pe principiul \"primul venit, primul servit\".</p>\n<p>Cu stimă,<br><strong>Echipa DentPro Clinic</strong></p>\n</div>"
+      },
+      "id": "email-waitlist",
+      "name": "Email Waitlist Offer",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1504,
+        704
+      ],
+      "webhookId": "6f86e892-fe41-4df8-9860-fac0790c0df8",
+      "credentials": {
+        "smtp": {
+          "id": "5LzvM8OsCy15sEku",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "response-cancel",
+      "name": "Response Cancel",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1504,
+        896
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook Appointment Confirmed": {
+      "main": [
+        [
+          {
+            "node": "Prepare Appointment Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Prepare Appointment Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Website Booking Webhook": {
+      "main": [
+        [
+          {
+            "node": "Prepare Appointment Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Appointment Data": {
+      "main": [
+        [
+          {
+            "node": "Add Appointment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Appointment": {
+      "main": [
+        [
+          {
+            "node": "Send Booking Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Booking Confirmation": {
+      "main": [
+        [
+          {
+            "node": "Calculate Wait Time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Wait Time": {
+      "main": [
+        [
+          {
+            "node": "Wait Until 2h Before",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Until 2h Before": {
+      "main": [
+        [
+          {
+            "node": "Skip Reminder?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip Reminder?": {
+      "main": [
+        [
+          {
+            "node": "Response Confirmed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Appointment Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Appointment Status": {
+      "main": [
+        [
+          {
+            "node": "Is Confirmed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Confirmed?": {
+      "main": [
+        [
+          {
+            "node": "Response Confirmed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Email 2h Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email 2h Reminder": {
+      "main": [
+        [
+          {
+            "node": "Update 2h Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update 2h Sent": {
+      "main": [
+        [
+          {
+            "node": "Email Staff Unconfirmed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Confirm": {
+      "main": [
+        [
+          {
+            "node": "Get Appointment for Confirm",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Appointment for Confirm": {
+      "main": [
+        [
+          {
+            "node": "Mark as Confirmed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark as Confirmed": {
+      "main": [
+        [
+          {
+            "node": "Response Confirm",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Cancel": {
+      "main": [
+        [
+          {
+            "node": "Get Appointment for Cancel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Appointment for Cancel": {
+      "main": [
+        [
+          {
+            "node": "Mark as Cancelled",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark as Cancelled": {
+      "main": [
+        [
+          {
+            "node": "Email Staff Cancel Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Staff Cancel Alert": {
+      "main": [
+        [
+          {
+            "node": "Get Waitlist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Waitlist": {
+      "main": [
+        [
+          {
+            "node": "Has Waitlist?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Waitlist?": {
+      "main": [
+        [
+          {
+            "node": "Email Waitlist Offer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Response Cancel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Waitlist Offer": {
+      "main": [
+        [
+          {
+            "node": "Response Cancel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Bucharest",
+    "errorWorkflow": "xXxInMLlLr07vHfJ",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed"
+  },
+  "staticData": {
+    "node:Schedule Check Reminders": {
+      "recurrenceRules": []
+    }
+  },
+  "pinData": {},
+  "triggerCount": 4,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

@@ -1,0 +1,723 @@
+{
+  "name": "DENTAL 4 - No-Show Reschedule & Patient Reactivation",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours"
+            }
+          ]
+        }
+      },
+      "id": "schedule-noshow",
+      "name": "Daily No-Show Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        256,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1PiSRv8QQmeQGPdcHLVQ7KRJuAbAxoLElzDa8B52nP_4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Appointments"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "status",
+              "lookupValue": "no_show"
+            }
+          ]
+        },
+        "options": {},
+        "authentication": "oAuth2"
+      },
+      "id": "get-noshows",
+      "name": "Get No-Shows",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        464,
+        208
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JxQN1tszvOquCqhF",
+          "name": "Dental Clinic CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter no-shows that haven't received reschedule email yet\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const data = item.json;\n  \n  // Skip if reschedule email already sent\n  if (data.reschedule_email_sent) {\n    continue;\n  }\n  \n  // Skip if no email address\n  if (!data.patient_email) {\n    continue;\n  }\n  \n  results.push({ json: data });\n}\n\nif (results.length === 0) {\n  return [{ json: { no_noshows: true } }];\n}\n\nreturn results;"
+      },
+      "id": "filter-unsent",
+      "name": "Filter Unsent Reschedules",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "noshow-check",
+              "leftValue": "={{ $json.no_noshows }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "check-has-noshows",
+      "name": "Has No-Shows?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "lucian.ianus05@gmail.com",
+        "toEmail": "={{ $('Has No-Shows?').item.json.patient_email }}",
+        "subject": "=Ne pare rău că nu ne-am întâlnit - {{ $('Has No-Shows?').item.json.patient_name }}",
+        "emailFormat": "html",
+        "message": "={{ $json.output }}",
+        "options": {}
+      },
+      "id": "send-reschedule",
+      "name": "Send Reschedule Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1296,
+        112
+      ],
+      "webhookId": "d3c56422-ffa2-4684-b90c-454dbe5857aa",
+      "credentials": {
+        "smtp": {
+          "id": "5LzvM8OsCy15sEku",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1PiSRv8QQmeQGPdcHLVQ7KRJuAbAxoLElzDa8B52nP_4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Appointments"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "row_number": 0
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "appointment_id",
+              "displayName": "appointment_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "lead_id",
+              "displayName": "lead_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "patient_name",
+              "displayName": "patient_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "patient_email",
+              "displayName": "patient_email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "patient_phone",
+              "displayName": "patient_phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "appointment_time",
+              "displayName": "appointment_time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "procedure",
+              "displayName": "procedure",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "reminder_48h_sent",
+              "displayName": "reminder_48h_sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "reminder_24h_sent",
+              "displayName": "reminder_24h_sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "reminder_2h_sent",
+              "displayName": "reminder_2h_sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "confirmed_at",
+              "displayName": "confirmed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "cancelled_at",
+              "displayName": "cancelled_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "language",
+              "displayName": "language",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "confirm_token",
+              "displayName": "confirm_token",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED"
+        },
+        "authentication": "oAuth2"
+      },
+      "id": "mark-reschedule-sent",
+      "name": "Mark Reschedule Sent",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1504,
+        112
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JxQN1tszvOquCqhF",
+          "name": "Dental Clinic CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "done-node",
+      "name": "Done",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1088,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                3
+              ]
+            }
+          ]
+        }
+      },
+      "id": "reactivation-trigger",
+      "name": "Weekly Reactivation Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        256,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1PiSRv8QQmeQGPdcHLVQ7KRJuAbAxoLElzDa8B52nP_4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Appointments"
+        },
+        "options": {},
+        "authentication": "oAuth2"
+      },
+      "id": "get-all-appointments",
+      "name": "Get All Appointments",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        464,
+        512
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JxQN1tszvOquCqhF",
+          "name": "Dental Clinic CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Find patients with last visit > 6 months ago\nconst items = $input.all();\nconst now = DateTime.now().setZone('Europe/Bucharest');\nconst sixMonthsAgo = now.minus({ months: 6 });\n\n// Group appointments by patient email to find last visit\nconst patientLastVisit = {};\n\nfor (const item of items) {\n  const data = item.json;\n  const email = data.patient_email;\n  const aptDate = data.appointment_datetime;\n  const status = data.status;\n  \n  if (!email || !aptDate) continue;\n  if (status !== 'completed') continue;\n  \n  const visitDate = DateTime.fromISO(aptDate);\n  \n  if (!patientLastVisit[email] || visitDate > patientLastVisit[email].lastVisit) {\n    patientLastVisit[email] = {\n      email: email,\n      name: data.patient_name || 'Pacient',\n      phone: data.patient_phone || '',\n      lastVisit: visitDate,\n      lastProcedure: data.procedure || 'Consultatie'\n    };\n  }\n}\n\n// Filter patients who haven't visited in 6+ months\nconst inactivePatients = [];\n\nfor (const email in patientLastVisit) {\n  const patient = patientLastVisit[email];\n  \n  if (patient.lastVisit < sixMonthsAgo) {\n    inactivePatients.push({\n      json: {\n        patient_email: patient.email,\n        patient_name: patient.name,\n        patient_phone: patient.phone,\n        last_visit: patient.lastVisit.toFormat('dd MMMM yyyy'),\n        last_procedure: patient.lastProcedure,\n        months_since_visit: Math.floor(now.diff(patient.lastVisit, 'months').months)\n      }\n    });\n  }\n}\n\nif (inactivePatients.length === 0) {\n  return [{ json: { no_inactive: true } }];\n}\n\ninactivePatients.sort((a, b) => b.json.months_since_visit - a.json.months_since_visit);\nreturn inactivePatients.slice(0, 10);"
+      },
+      "id": "find-inactive",
+      "name": "Find Inactive Patients (6+ months)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "inactive-check",
+              "leftValue": "={{ $json.no_inactive }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "has-inactive",
+      "name": "Has Inactive Patients?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "lucian.ianus05@gmail.com",
+        "toEmail": "={{ $('Has Inactive Patients?').item.json.patient_email }}",
+        "subject": "=Ne-ar bucura să vă revedem - {{ $('Has Inactive Patients?').item.json.patient_name }}",
+        "emailFormat": "html",
+        "message": "={{ $json.output }}",
+        "options": {}
+      },
+      "id": "send-reactivation",
+      "name": "Send Reactivation Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1296,
+        416
+      ],
+      "webhookId": "24dd8648-3613-42bf-bace-76502b787c71",
+      "credentials": {
+        "smtp": {
+          "id": "5LzvM8OsCy15sEku",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "reactivation-done",
+      "name": "Reactivation Done",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1088,
+        608
+      ]
+    },
+    {
+      "id": "ai-reschedule",
+      "name": "AI Generate Reschedule Email",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [
+        1088,
+        112
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "=Generează un email personalizat în limba română pentru un pacient care nu s-a prezentat la programare.\n\nDetalii pacient:\n- Nume: {{ $json.patient_name }}\n- Email: {{ $json.patient_email }}\n- Data programării ratate: {{ $json.appointment_time }}\n- Procedura programată: {{ $json.procedure || 'Consultație' }}\n\nReguli:\n1. Tonul să fie cald, empatic și profesional\n2. NU judeca sau învinovăți pacientul\n3. Subliniază că înțelegi că pot apărea situații neprevăzute\n4. Invită-l să reprogrameze\n5. Menționează beneficiile îngrijirii dentare regulate\n6. Include informațiile de contact: +40 XXX XXX XXX și info@dentpro.ro\n7. Semnează ca \"Echipa DentPro Clinic\"\n8. Returnează DOAR conținutul HTML al email-ului, fără explicații\n9. Folosește stiluri inline pentru formatare frumoasă"
+      }
+    },
+    {
+      "id": "ai-reactivation",
+      "name": "AI Generate Reactivation Email",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [
+        1088,
+        416
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "=Generează un email personalizat în limba română pentru reactivarea unui pacient inactiv.\n\nDetalii pacient:\n- Nume: {{ $json.patient_name }}\n- Ultima vizită: {{ $json.last_visit }}\n- Ultima procedură: {{ $json.last_procedure }}\n- Luni de la ultima vizită: {{ $json.months_since_visit }}\n\nReguli:\n1. Tonul să fie prietenos și grijuliu, NU insistent sau agresiv\n2. Personalizează mesajul bazat pe cât timp a trecut (6 luni vs 12+ luni)\n3. Menționează importanța controalelor regulate pentru prevenție\n4. Dacă ultima procedură a fost specifică (ex: tratament de canal), sugerează un control de urmărire\n5. Oferă o mică motivație să revină (ex: \"ne-ar bucura să vă revedem\")\n6. Include informațiile de contact: +40 XXX XXX XXX și info@dentpro.ro\n7. Semnează ca \"Echipa DentPro Clinic\"\n8. Returnează DOAR conținutul HTML al email-ului, fără explicații\n9. Folosește stiluri inline pentru formatare frumoasă și profesională"
+      }
+    },
+    {
+      "id": "openai-model",
+      "name": "OpenAI GPT-5.2",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        680,
+        0
+      ],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gpt-5.2"
+        },
+        "options": {
+          "temperature": 0.7
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Daily No-Show Check": {
+      "main": [
+        [
+          {
+            "node": "Get No-Shows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get No-Shows": {
+      "main": [
+        [
+          {
+            "node": "Filter Unsent Reschedules",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Unsent Reschedules": {
+      "main": [
+        [
+          {
+            "node": "Has No-Shows?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has No-Shows?": {
+      "main": [
+        [
+          {
+            "node": "AI Generate Reschedule Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Reschedule Email": {
+      "main": [
+        [
+          {
+            "node": "Mark Reschedule Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Weekly Reactivation Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get All Appointments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get All Appointments": {
+      "main": [
+        [
+          {
+            "node": "Find Inactive Patients (6+ months)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Inactive Patients (6+ months)": {
+      "main": [
+        [
+          {
+            "node": "Has Inactive Patients?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Inactive Patients?": {
+      "main": [
+        [
+          {
+            "node": "AI Generate Reactivation Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reactivation Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Generate Reschedule Email": {
+      "main": [
+        [
+          {
+            "node": "Send Reschedule Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Generate Reactivation Email": {
+      "main": [
+        [
+          {
+            "node": "Send Reactivation Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI GPT-5.2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Generate Reschedule Email",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "AI Generate Reactivation Email",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "errorWorkflow": "xXxInMLlLr07vHfJ"
+  },
+  "staticData": {
+    "node:Daily No-Show Check": {
+      "recurrenceRules": []
+    },
+    "node:Weekly Reactivation Trigger": {
+      "recurrenceRules": []
+    }
+  },
+  "pinData": {},
+  "triggerCount": 2,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

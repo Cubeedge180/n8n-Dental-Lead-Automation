@@ -1,0 +1,262 @@
+{
+  "name": "DENTAL 5 - Management Reporting",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "id": "schedule-weekly",
+      "name": "Weekly Monday Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        272,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1PiSRv8QQmeQGPdcHLVQ7KRJuAbAxoLElzDa8B52nP_4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Leads"
+        },
+        "options": {},
+        "authentication": "oAuth2"
+      },
+      "id": "read-leads",
+      "name": "Read Leads Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        480,
+        208
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JxQN1tszvOquCqhF",
+          "name": "Dental Clinic CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1PiSRv8QQmeQGPdcHLVQ7KRJuAbAxoLElzDa8B52nP_4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Appointments"
+        },
+        "options": {},
+        "authentication": "oAuth2"
+      },
+      "id": "read-appointments",
+      "name": "Read Appointments Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        480,
+        400
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "r4vMeHIQcY6Dfkzb",
+          "name": "Dental Outreach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get data from both inputs\nconst leadsData = $input.all();\nconst appointmentsData = $('Read Appointments Sheet').all();\n\n// Get date ranges\nconst now = DateTime.now().setZone('Europe/Bucharest');\nconst weekAgo = now.minus({ weeks: 1 });\nconst twoWeeksAgo = now.minus({ weeks: 2 });\n\n// Calculate lead metrics\nlet thisWeekLeads = 0;\nlet lastWeekLeads = 0;\nlet leadsBySource = {};\nlet statusCounts = {};\n\nfor (const item of leadsData) {\n  const lead = item.json;\n  const createdAt = lead.created_at || lead.createdAt;\n  \n  if (createdAt) {\n    const leadDate = DateTime.fromISO(createdAt);\n    if (leadDate >= weekAgo) {\n      thisWeekLeads++;\n    } else if (leadDate >= twoWeeksAgo && leadDate < weekAgo) {\n      lastWeekLeads++;\n    }\n  }\n  \n  // Count by source\n  const source = lead.source || 'unknown';\n  leadsBySource[source] = (leadsBySource[source] || 0) + 1;\n  \n  // Count by status\n  const status = lead.status || 'unknown';\n  statusCounts[status] = (statusCounts[status] || 0) + 1;\n}\n\n// Calculate appointment metrics\nlet thisWeekAppointments = 0;\nlet noShowCount = 0;\nlet completedCount = 0;\nlet cancelledCount = 0;\n\nfor (const item of appointmentsData) {\n  const apt = item.json;\n  const aptDate = apt.appointment_datetime || apt.appointment_date;\n  \n  if (aptDate) {\n    const date = DateTime.fromISO(aptDate);\n    if (date >= weekAgo) {\n      thisWeekAppointments++;\n    }\n  }\n  \n  const status = apt.status || '';\n  if (status === 'no_show') noShowCount++;\n  if (status === 'completed') completedCount++;\n  if (status === 'cancelled') cancelledCount++;\n}\n\n// Format report\nconst leadGrowth = lastWeekLeads > 0 \n  ? ((thisWeekLeads - lastWeekLeads) / lastWeekLeads * 100).toFixed(1) \n  : 'N/A';\n\nconst noShowRate = thisWeekAppointments > 0 \n  ? ((noShowCount / thisWeekAppointments) * 100).toFixed(1)\n  : '0';\n\nreturn [{\n  json: {\n    report_date: now.toFormat('dd MMMM yyyy'),\n    report_week: now.weekNumber,\n    total_leads: leadsData.length,\n    this_week_leads: thisWeekLeads,\n    last_week_leads: lastWeekLeads,\n    lead_growth_percent: leadGrowth,\n    leads_by_source: JSON.stringify(leadsBySource),\n    leads_by_status: JSON.stringify(statusCounts),\n    new_count: statusCounts.new || 0,\n    contacted_count: statusCounts.contacted || 0,\n    booked_count: (statusCounts.booked_pending || 0) + (statusCounts.booked_confirmed || 0),\n    completed_count: statusCounts.completed || 0,\n    lost_count: statusCounts.lost || 0,\n    this_week_appointments: thisWeekAppointments,\n    no_show_count: noShowCount,\n    no_show_rate: noShowRate,\n    cancelled_count: cancelledCount\n  }\n}];"
+      },
+      "id": "calculate-metrics",
+      "name": "Calculate Weekly Metrics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        704,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const m = $('Calculate Weekly Metrics').first().json;\nconst aiInsights = $json.output || '';\n\nconst leadsBySource = JSON.parse(m.leads_by_source || '{}');\nconst leadsByStatus = JSON.parse(m.leads_by_status || '{}');\n\nconst html = `\n<!DOCTYPE html>\n<html>\n<head>\n  <style>\n    body { font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto; padding: 20px; background: #f5f5f5; }\n    .container { background: white; border-radius: 12px; padding: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }\n    h1 { color: #2563eb; border-bottom: 2px solid #2563eb; padding-bottom: 10px; margin-top: 0; }\n    h2 { color: #374151; margin-top: 25px; font-size: 18px; }\n    .metric-card { background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 10px 0; text-align: center; }\n    .metric-value { font-size: 32px; font-weight: bold; color: #2563eb; }\n    .metric-label { color: #6b7280; font-size: 14px; margin-top: 5px; }\n    .growth-positive { color: #10b981; font-weight: bold; }\n    .growth-negative { color: #ef4444; font-weight: bold; }\n    .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }\n    table { width: 100%; border-collapse: collapse; margin: 15px 0; }\n    th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb; }\n    th { background: #f9fafb; font-weight: 600; color: #374151; }\n    .ai-insights { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; border-radius: 12px; margin: 25px 0; }\n    .ai-insights h2 { color: white; margin-top: 0; border-bottom: 2px solid rgba(255,255,255,0.3); padding-bottom: 10px; }\n    .ai-insights-content { line-height: 1.8; }\n    .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; color: #6b7280; font-size: 12px; text-align: center; }\n  </style>\n</head>\n<body>\n  <div class=\"container\">\n    <h1>📊 Raport Săptămânal cu AI Insights</h1>\n    <p style=\"color: #6b7280;\">Săptămâna ${m.report_week} | ${m.report_date}</p>\n    \n    <div class=\"ai-insights\">\n      <h2>🤖 AI Insights & Recomandări</h2>\n      <div class=\"ai-insights-content\">${aiInsights}</div>\n    </div>\n    \n    <h2>📈 Lead-uri</h2>\n    <div class=\"metrics-grid\">\n      <div class=\"metric-card\">\n        <div class=\"metric-value\">${m.this_week_leads}</div>\n        <div class=\"metric-label\">Lead-uri această săptămână</div>\n        <div class=\"${parseFloat(m.lead_growth_percent) >= 0 ? 'growth-positive' : 'growth-negative'}\">\n          ${m.lead_growth_percent !== 'N/A' ? (parseFloat(m.lead_growth_percent) >= 0 ? '↑' : '↓') + ' ' + Math.abs(parseFloat(m.lead_growth_percent)) + '%' : 'Prima săptămână'}\n        </div>\n      </div>\n      <div class=\"metric-card\">\n        <div class=\"metric-value\">${m.total_leads}</div>\n        <div class=\"metric-label\">Total lead-uri în bază</div>\n      </div>\n    </div>\n    \n    <h2>📅 Programări</h2>\n    <div class=\"metrics-grid\">\n      <div class=\"metric-card\">\n        <div class=\"metric-value\">${m.this_week_appointments}</div>\n        <div class=\"metric-label\">Programări această săptămână</div>\n      </div>\n      <div class=\"metric-card\">\n        <div class=\"metric-value\" style=\"color: ${parseFloat(m.no_show_rate) > 15 ? '#ef4444' : '#10b981'};\">${m.no_show_rate}%</div>\n        <div class=\"metric-label\">Rată No-Show</div>\n      </div>\n    </div>\n    \n    <h2>📊 Funnel de Conversie</h2>\n    <table>\n      <tr><th>Status</th><th>Număr</th></tr>\n      <tr><td>🆕 Noi</td><td><strong>${m.new_count}</strong></td></tr>\n      <tr><td>📞 Contactați</td><td><strong>${m.contacted_count}</strong></td></tr>\n      <tr><td>📅 Programați</td><td><strong>${m.booked_count}</strong></td></tr>\n      <tr><td>✅ Finalizați</td><td><strong>${m.completed_count}</strong></td></tr>\n      <tr><td>❌ Pierduți</td><td><strong>${m.lost_count}</strong></td></tr>\n    </table>\n    \n    <h2>📍 Surse Lead-uri</h2>\n    <table>\n      <tr><th>Sursă</th><th>Număr</th></tr>\n      ${Object.entries(leadsBySource).map(([source, count]) => \n        '<tr><td>' + source + '</td><td><strong>' + count + '</strong></td></tr>'\n      ).join('')}\n    </table>\n    \n    <div class=\"footer\">\n      <p>Raport generat automat de Lucian AutoSys cu AI Insights powered by Gemini</p>\n      <p>📧 contact@lucian-systems.com | 📞 +40 735 105 747</p>\n    </div>\n  </div>\n</body>\n</html>\n`;\n\nreturn [{\n  json: {\n    ...m,\n    ai_insights: aiInsights,\n    html_report: html,\n    subject: '📊🤖 Raport Săptămânal cu AI - ' + m.this_week_leads + ' lead-uri (Săpt. ' + m.report_week + ')'\n  }\n}];"
+      },
+      "id": "generate-html",
+      "name": "Generate HTML Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1152,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "lucian.ianus05@gmail.com",
+        "toEmail": "contact@lucian-systems.com",
+        "subject": "={{ $json.subject }}",
+        "options": {},
+        "emailFormat": "html",
+        "message": "={{ $json.html_report }}"
+      },
+      "id": "send-report",
+      "name": "Send Report Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1376,
+        304
+      ],
+      "webhookId": "40575305-275b-4ba1-bf95-6fbab30bf2b7",
+      "credentials": {
+        "smtp": {
+          "id": "5LzvM8OsCy15sEku",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "id": "ai-insights-agent",
+      "name": "AI Generate Insights",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [
+        928,
+        304
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "=Analizează următoarele metrici săptămânale pentru o clinică dentară și generează 3-5 insight-uri acționabile în limba română.\n\nMETRICI:\n- Lead-uri această săptămână: {{ $json.this_week_leads }}\n- Lead-uri săptămâna trecută: {{ $json.last_week_leads }}\n- Creștere lead-uri: {{ $json.lead_growth_percent }}%\n- Total lead-uri în bază: {{ $json.total_leads }}\n- Programări această săptămână: {{ $json.this_week_appointments }}\n- Rată no-show: {{ $json.no_show_rate }}%\n- Lead-uri noi: {{ $json.new_count }}\n- Lead-uri contactate: {{ $json.contacted_count }}\n- Lead-uri programate: {{ $json.booked_count }}\n- Lead-uri finalizate: {{ $json.completed_count }}\n- Lead-uri pierdute: {{ $json.lost_count }}\n- Surse lead-uri: {{ $json.leads_by_source }}\n\nREGULI:\n1. Identifică tendințe (pozitive sau negative)\n2. Evidențiază probleme potențiale (ex: rată no-show mare, conversie slabă)\n3. Sugerează acțiuni concrete și specifice\n4. Folosește comparații cu săptămâna anterioară\n5. Prioritizează insight-urile după impact\n6. Tonul să fie profesional dar accesibil\n7. Returnează doar HTML formatat frumos cu stiluri inline\n8. Folosește emoji-uri pentru a face mesajul vizual\n9. Include o secțiune \"Recomandări pentru săptămâna viitoare\""
+      }
+    },
+    {
+      "id": "openai-insights",
+      "name": "OpenAI GPT-5.2",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        928,
+        140
+      ],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gpt-5.2"
+        },
+        "options": {
+          "temperature": 0.7
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Weekly Monday Trigger": {
+      "main": [
+        [
+          {
+            "node": "Read Leads Sheet",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Read Appointments Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Leads Sheet": {
+      "main": [
+        [
+          {
+            "node": "Calculate Weekly Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Weekly Metrics": {
+      "main": [
+        [
+          {
+            "node": "AI Generate Insights",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate HTML Report": {
+      "main": [
+        [
+          {
+            "node": "Send Report Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Generate Insights": {
+      "main": [
+        [
+          {
+            "node": "Generate HTML Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI GPT-5.2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Generate Insights",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "xXxInMLlLr07vHfJ",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": {
+    "node:Weekly Monday Trigger": {
+      "recurrenceRules": []
+    }
+  },
+  "pinData": {},
+  "triggerCount": 1,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

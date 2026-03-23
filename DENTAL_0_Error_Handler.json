@@ -1,0 +1,443 @@
+{
+  "name": "DENTAL 0 - Error Handler",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        256,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract error details from the error trigger\nconst errorData = $input.first().json;\n\nconst timestamp = new Date().toISOString();\nconst workflowName = errorData.workflow?.name || 'Unknown Workflow';\nconst workflowId = errorData.workflow?.id || 'unknown';\nconst executionId = errorData.execution?.id || 'unknown';\nconst nodeName = errorData.execution?.lastNodeExecuted || 'Unknown Node';\nconst errorMessage = errorData.execution?.error?.message || 'No error message';\nconst errorStack = errorData.execution?.error?.stack || '';\n\n// Summarize payload (first 500 chars to avoid huge logs)\nconst payloadSummary = JSON.stringify(errorData.execution?.data || {}).substring(0, 500);\n\nreturn [{\n  json: {\n    timestamp,\n    workflow_name: workflowName,\n    workflow_id: workflowId,\n    execution_id: executionId,\n    failing_node: nodeName,\n    error_message: errorMessage,\n    error_stack: errorStack.substring(0, 1000),\n    payload_summary: payloadSummary,\n    severity: 'ERROR'\n  }\n}];"
+      },
+      "id": "format-error",
+      "name": "Format Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        464,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1PiSRv8QQmeQGPdcHLVQ7KRJuAbAxoLElzDa8B52nP_4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Errors"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "workflow_name",
+              "displayName": "workflow_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "workflow_id",
+              "displayName": "workflow_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "execution_id",
+              "displayName": "execution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "failing_node",
+              "displayName": "failing_node",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "error_message",
+              "displayName": "error_message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "error_stack",
+              "displayName": "error_stack",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "payload_summary",
+              "displayName": "payload_summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "severity",
+              "displayName": "severity",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "log-error",
+      "name": "Log to Errors Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        704,
+        464
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JxQN1tszvOquCqhF",
+          "name": "Dental Clinic CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://alisia-ridgepoled-unfirmly.ngrok-free.dev/fix-workflow",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "38fv3ak4KlY3ELyuPmAe2Wt6mh6_3F239azPB7vXhW7LstMo3"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ workflow: $('Error Trigger').item.json.workflow, execution: $('Error Trigger').item.json.execution, trigger: $('Error Trigger').item.json.trigger }) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "call-claude-fix",
+      "name": "Call Claude Fix",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        560,
+        464
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Analyze this n8n workflow error and respond in EXACTLY this format:\n\nDIAGNOSIS: [One sentence explaining what caused this error]\nFIX: [One sentence explaining how to fix it]\n\nWorkflow: {{ $('Format Error').item.json.workflow_name }}\nFailed Node: {{ $('Format Error').item.json.failing_node }}\nError: {{ $('Format Error').item.json.error_message }}\n\nRespond ONLY with DIAGNOSIS and FIX lines. Nothing else.",
+        "options": {
+          "systemMessage": "You are an expert n8n workflow debugger. You analyze errors and provide extremely concise diagnoses. Always respond in exactly this format:\n\nDIAGNOSIS: [one sentence]\nFIX: [one sentence]\n\nNever add extra text. Keep each line under 100 characters."
+        }
+      },
+      "id": "ai-agent",
+      "name": "AI Error Analyzer",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        832,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "openai-chat-model",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        880,
+        528
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "Sc9G6lwJA4gXSFFj",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "error_history",
+        "contextWindowLength": 10
+      },
+      "id": "simple-memory",
+      "name": "Error Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        1008,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "email_subject",
+              "name": "email_subject",
+              "value": "={{ '⚠️ ' + $('Format Error').item.json.workflow_name + ' - ' + $('Format Error').item.json.failing_node + ' Failed' }}",
+              "type": "string"
+            },
+            {
+              "id": "workflow_name",
+              "name": "workflow_name",
+              "value": "={{ $('Format Error').item.json.workflow_name }}",
+              "type": "string"
+            },
+            {
+              "id": "failing_node",
+              "name": "failing_node",
+              "value": "={{ $('Format Error').item.json.failing_node }}",
+              "type": "string"
+            },
+            {
+              "id": "timestamp",
+              "name": "timestamp",
+              "value": "={{ $('Format Error').item.json.timestamp }}",
+              "type": "string"
+            },
+            {
+              "id": "execution_id",
+              "name": "execution_id",
+              "value": "={{ $('Format Error').item.json.execution_id }}",
+              "type": "string"
+            },
+            {
+              "id": "workflow_id",
+              "name": "workflow_id",
+              "value": "={{ $('Format Error').item.json.workflow_id }}",
+              "type": "string"
+            },
+            {
+              "id": "error_message",
+              "name": "error_message",
+              "value": "={{ $('Format Error').item.json.error_message }}",
+              "type": "string"
+            },
+            {
+              "id": "ai_analysis",
+              "name": "ai_analysis",
+              "value": "={{ $json.output || 'AI analysis unavailable' }}",
+              "type": "string"
+            },
+            {
+              "id": "execution_url",
+              "name": "execution_url",
+              "value": "={{ 'https://zappai.app.n8n.cloud/workflow/' + $('Format Error').item.json.workflow_id + '/executions/' + $('Format Error').item.json.execution_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "build-email-data",
+      "name": "Build Email Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1104,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "lucian.ianus05@gmail.com",
+        "toEmail": "lucian.ianus05@gmail.com",
+        "subject": "={{ $json.email_subject }}",
+        "html": "=<!DOCTYPE html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"></head><body style=\"margin:0;padding:0;background-color:#1a1a2e;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;\"><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background-color:#1a1a2e;padding:20px;\"><tr><td align=\"center\"><table width=\"600\" cellpadding=\"0\" cellspacing=\"0\" style=\"background-color:#16213e;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.3);\"><tr><td style=\"background:linear-gradient(135deg,#e94560,#ff6b6b);padding:20px 30px;\"><h1 style=\"margin:0;color:#fff;font-size:24px;font-weight:600;\">⚠️ WORKFLOW ERROR</h1></td></tr><tr><td style=\"padding:30px;\"><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background-color:#0f3460;border-radius:8px;margin-bottom:20px;\"><tr><td style=\"padding:20px;\"><table width=\"100%\" cellpadding=\"8\" cellspacing=\"0\"><tr><td style=\"color:#8892b0;font-size:13px;width:120px;\">Workflow</td><td style=\"color:#fff;font-size:14px;font-weight:500;\">{{ $json.workflow_name }}</td></tr><tr><td style=\"color:#8892b0;font-size:13px;\">Failed Node</td><td style=\"color:#e94560;font-size:14px;font-weight:600;\">{{ $json.failing_node }}</td></tr><tr><td style=\"color:#8892b0;font-size:13px;\">Time</td><td style=\"color:#fff;font-size:14px;\">{{ $json.timestamp }}</td></tr><tr><td style=\"color:#8892b0;font-size:13px;\">Execution</td><td style=\"color:#fff;font-size:14px;\">#{{ $json.execution_id }}</td></tr></table></td></tr></table><div style=\"background-color:#0f3460;border-radius:8px;padding:20px;margin-bottom:20px;border-left:4px solid #e94560;\"><div style=\"color:#e94560;font-size:12px;font-weight:600;text-transform:uppercase;margin-bottom:10px;\">Error Message</div><div style=\"color:#ccd6f6;font-size:14px;line-height:1.6;\">{{ $json.error_message }}</div></div><div style=\"background-color:#0f3460;border-radius:8px;padding:20px;margin-bottom:20px;border-left:4px solid #64ffda;\"><div style=\"color:#64ffda;font-size:12px;font-weight:600;text-transform:uppercase;margin-bottom:10px;\">🤖 AI Diagnosis</div><div style=\"color:#ccd6f6;font-size:14px;line-height:1.6;\">{{ $json.ai_analysis }}</div></div><div style=\"background-color:#0f3460;border-radius:8px;padding:15px;margin-bottom:25px;border-left:4px solid #4dabf7;\"><div style=\"color:#4dabf7;font-size:13px;\">🔧 Auto-fix has been <strong>TRIGGERED</strong> via Claude Code</div></div><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"><tr><td align=\"center\"><a href=\"{{ $json.execution_url }}\" style=\"display:inline-block;background:linear-gradient(135deg,#f39c12,#e67e22);color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:600;font-size:14px;\">View Execution →</a></td></tr></table></td></tr><tr><td style=\"background-color:#0f3460;padding:15px 30px;text-align:center;\"><div style=\"color:#5a6a8a;font-size:12px;\">n8n Auto-Fix System • Powered by Claude Code</div></td></tr></table></td></tr></table></body></html>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "alert-email",
+      "name": "Alert Staff Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1280,
+        304
+      ],
+      "webhookId": "55437790-e220-4717-8e25-2d24f0aad4d6",
+      "credentials": {
+        "smtp": {
+          "id": "5LzvM8OsCy15sEku",
+          "name": "SMTP account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Format Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Error": {
+      "main": [
+        [
+          {
+            "node": "Call Claude Fix",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Claude Fix": {
+      "main": [
+        [
+          {
+            "node": "Log to Errors Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log to Errors Sheet": {
+      "main": [
+        [
+          {
+            "node": "AI Error Analyzer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Error Analyzer": {
+      "main": [
+        [
+          {
+            "node": "Build Email Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Email Data": {
+      "main": [
+        [
+          {
+            "node": "Alert Staff Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Error Analyzer",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Error Analyzer",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Bucharest",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "pinData": {},
+  "triggerCount": 0,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

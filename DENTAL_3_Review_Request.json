@@ -1,0 +1,319 @@
+{
+  "name": "DENTAL 3 - Review Request",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "dental/appointment/completed",
+        "options": {}
+      },
+      "id": "webhook-completed",
+      "name": "Webhook Completed",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        256,
+        304
+      ],
+      "webhookId": "dental-apt-completed"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calculate 1 hour after appointment ends\n// Appointment duration defaults to 60 minutes if not specified\nconst input = $input.first().json;\nconst body = input.body || input;\n\nconst appointmentTime = body.appointment_time || body.appointment_datetime;\nconst durationMinutes = body.duration_minutes || 60;\n\nif (!appointmentTime) {\n  // If no appointment time, wait 1 hour from now\n  return [{\n    json: {\n      ...body,\n      wait_minutes: 60,\n      post_visit_reason: 'No appointment time provided, defaulting to 1h from now'\n    }\n  }];\n}\n\nconst aptTime = DateTime.fromISO(appointmentTime).setZone('Europe/Bucharest');\nconst appointmentEnd = aptTime.plus({ minutes: durationMinutes });\nconst postVisitTime = appointmentEnd.plus({ hours: 1 });\nconst now = DateTime.now().setZone('Europe/Bucharest');\n\n// Calculate minutes until post-visit email should be sent\nlet waitMinutes = postVisitTime.diff(now, 'minutes').minutes;\n\n// If the calculated time is in the past, don't wait\nif (waitMinutes < 0) {\n  waitMinutes = 1; // Send almost immediately\n}\n\nreturn [{\n  json: {\n    ...body,\n    appointment_end: appointmentEnd.toISO(),\n    post_visit_time: postVisitTime.toISO(),\n    wait_minutes: Math.round(waitMinutes),\n    wait_hours: Math.round(waitMinutes / 60 * 10) / 10\n  }\n}];"
+      },
+      "id": "calc-delay",
+      "name": "Calculate 1h Post-Visit Delay",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        464,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": "={{ $json.wait_minutes }}",
+        "unit": "minutes"
+      },
+      "id": "wait-delay",
+      "name": "Wait 1h After Visit",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        656,
+        304
+      ],
+      "webhookId": "4b40eede-4ae7-4fd2-8b3d-a5f8ca21e3bb"
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1PiSRv8QQmeQGPdcHLVQ7KRJuAbAxoLElzDa8B52nP_4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Leads"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "email",
+              "lookupValue": "={{ $json.patient_email }}"
+            }
+          ]
+        },
+        "options": {},
+        "range": "A:Z",
+        "authentication": "oAuth2"
+      },
+      "id": "get-lead-info",
+      "name": "Get Lead Info",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        864,
+        304
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JxQN1tszvOquCqhF",
+          "name": "Dental Clinic CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge appointment and lead data\nconst aptData = $('Wait Random Delay').first().json;\nconst leadData = $input.first().json;\n\nreturn [{\n  json: {\n    appointment_id: aptData.appointment_id,\n    patient_name: aptData.patient_name || leadData.name || '',\n    patient_email: aptData.patient_email || leadData.email || '',\n    language: aptData.language || leadData.language || 'ro',\n    lead_id: leadData.lead_id || ''\n  }\n}];"
+      },
+      "id": "merge-data",
+      "name": "Merge Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1056,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1PiSRv8QQmeQGPdcHLVQ7KRJuAbAxoLElzDa8B52nP_4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Leads"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "lead_id": "={{ $json.lead_id }}",
+            "review_requested_at": "={{ $now.toISO() }}",
+            "review_status": "sent"
+          }
+        },
+        "authentication": "oAuth2"
+      },
+      "id": "log-review",
+      "name": "Log Review Sent",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1864,
+        304
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JxQN1tszvOquCqhF",
+          "name": "Dental Clinic CRM"
+        }
+      }
+    },
+    {
+      "id": "ai-personalize-review",
+      "name": "AI Personalize Review Request",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [
+        1264,
+        304
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "You are an email writer for a dental practice. Create a personalized review request email.\n\nPatient Details:\n- Name: {{ $json.patient_name }}\n- Email: {{ $json.email }}\n- Language: {{ $json.language }}\n- Treatment: {{ $json.treatment_type }}\n- Visit Date: {{ $json.visit_date }}\n\nWrite a warm, personalized email in the patient's preferred language ({{ $json.language }}) asking them to leave a Google review. Mention their specific treatment to make it personal.\n\nReturn ONLY a JSON object with:\n{\n  \"subject\": \"email subject line\",\n  \"body\": \"full email body in HTML format\"\n}"
+      }
+    },
+    {
+      "id": "parse-ai-email",
+      "name": "Parse AI Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1464,
+        304
+      ],
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nlet aiResponse = input.output || input.text || '';\n\nlet emailData = { subject: 'Please Leave Us a Review', body: '' };\ntry {\n  const jsonMatch = aiResponse.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    emailData = JSON.parse(jsonMatch[0]);\n  }\n} catch (e) {\n  emailData.body = aiResponse;\n}\n\nreturn [{\n  json: {\n    ...input,\n    ai_subject: emailData.subject,\n    ai_body: emailData.body\n  }\n}];"
+      }
+    },
+    {
+      "id": "send-ai-review-email",
+      "name": "Send AI Review Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1664,
+        304
+      ],
+      "parameters": {
+        "fromEmail": "reviews@dentalclinic.com",
+        "toEmail": "={{ $json.email }}",
+        "subject": "={{ $json.ai_subject }}",
+        "emailType": "html",
+        "html": "={{ $json.ai_body }}"
+      }
+    },
+    {
+      "id": "openai-review",
+      "name": "OpenAI GPT-5.2",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1264,
+        140
+      ],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gpt-5.2"
+        },
+        "options": {
+          "temperature": 0.7
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Completed": {
+      "main": [
+        [
+          {
+            "node": "Calculate 1h Post-Visit Delay",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate 1h Post-Visit Delay": {
+      "main": [
+        [
+          {
+            "node": "Wait 1h After Visit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 1h After Visit": {
+      "main": [
+        [
+          {
+            "node": "Get Lead Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Lead Info": {
+      "main": [
+        [
+          {
+            "node": "Merge Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Data": {
+      "main": [
+        [
+          {
+            "node": "AI Personalize Review Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Personalize Review Request": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Email": {
+      "main": [
+        [
+          {
+            "node": "Send AI Review Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send AI Review Email": {
+      "main": [
+        [
+          {
+            "node": "Log Review Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI GPT-5.2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Personalize Review Request",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Bucharest",
+    "errorWorkflow": "xXxInMLlLr07vHfJ",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "pinData": {},
+  "triggerCount": 1,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

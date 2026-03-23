@@ -1,0 +1,204 @@
+{
+  "name": "DENTAL - Test Harness",
+  "nodes": [
+    {
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "generate-tests",
+      "name": "Generate Test Payloads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        450,
+        300
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Generate test payloads for all dental webhooks\nconst baseUrl = $vars.N8N_HOST || 'zappai.app.n8n.cloud';\nconst testTimestamp = new Date().toISOString();\nconst futureDate = new Date();\nfutureDate.setDate(futureDate.getDate() + 3);\nfutureDate.setHours(10, 0, 0, 0);\n\nconst tests = [\n  {\n    name: 'Lead - Webform',\n    endpoint: `https://${baseUrl}/webhook/dental/lead/webform`,\n    method: 'POST',\n    payload: {\n      name: 'Test User Webform',\n      phone: '+40712345678',\n      email: 'test.webform@example.com',\n      language: 'ro',\n      procedure: 'cleaning',\n      notes: 'Test from harness - webform'\n    }\n  },\n  {\n    name: 'Lead - Missed Call',\n    endpoint: `https://${baseUrl}/webhook/dental/lead/missed-call`,\n    method: 'POST',\n    payload: {\n      phone: '+40712345679',\n      caller_id: '+40712345679',\n      timestamp: testTimestamp\n    }\n  },\n  {\n    name: 'Lead - Meta',\n    endpoint: `https://${baseUrl}/webhook/dental/lead/meta`,\n    method: 'POST',\n    payload: {\n      name: 'Test User Meta',\n      phone: '+40712345680',\n      email: 'test.meta@example.com',\n      language: 'en',\n      interest: 'whitening',\n      message: 'Test from harness - meta lead'\n    }\n  },\n  {\n    name: 'Appointment Confirmed',\n    endpoint: `https://${baseUrl}/webhook/dental/appointment/confirmed`,\n    method: 'POST',\n    payload: {\n      lead_id: 'test_lead_001',\n      name: 'Test Patient',\n      email: 'test.patient@example.com',\n      phone: '+40712345681',\n      appointment_time: futureDate.toISOString(),\n      procedure: 'consultation',\n      language: 'ro'\n    }\n  },\n  {\n    name: 'Appointment Completed',\n    endpoint: `https://${baseUrl}/webhook/dental/appointment/completed`,\n    method: 'POST',\n    payload: {\n      appointment_id: 'apt_test_001',\n      name: 'Test Completed Patient',\n      email: 'test.completed@example.com',\n      language: 'ro'\n    }\n  }\n];\n\nreturn tests.map(test => ({ json: test }));"
+      }
+    },
+    {
+      "id": "split-items",
+      "name": "Split Into Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3.1,
+      "position": [
+        650,
+        300
+      ],
+      "parameters": {
+        "batchSize": 1
+      }
+    },
+    {
+      "id": "http-request",
+      "name": "Execute Test",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        850,
+        300
+      ],
+      "parameters": {
+        "method": "={{ $json.method }}",
+        "url": "={{ $json.endpoint }}",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": []
+        },
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}",
+        "options": {
+          "timeout": 30000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "collect-results",
+      "name": "Collect Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1050,
+        300
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Collect test result\nconst testData = $('Split Into Batches').first().json;\nconst response = $input.first().json;\nconst statusCode = $input.first().json.statusCode || 200;\n\nconst success = statusCode >= 200 && statusCode < 300;\n\nreturn {\n  json: {\n    test_name: testData.name,\n    endpoint: testData.endpoint,\n    status: success ? 'PASSED' : 'FAILED',\n    status_code: statusCode,\n    response_preview: JSON.stringify(response).substring(0, 200)\n  }\n};"
+      }
+    },
+    {
+      "id": "loop-back",
+      "name": "Loop",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3.1,
+      "position": [
+        1250,
+        300
+      ],
+      "parameters": {
+        "batchSize": 1,
+        "options": {
+          "reset": false
+        }
+      }
+    },
+    {
+      "id": "summarize",
+      "name": "Summarize Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1450,
+        300
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Summarize all test results\nconst results = $input.all().map(i => i.json);\nconst passed = results.filter(r => r.status === 'PASSED').length;\nconst failed = results.filter(r => r.status === 'FAILED').length;\n\nreturn [{\n  json: {\n    summary: {\n      total_tests: results.length,\n      passed: passed,\n      failed: failed,\n      success_rate: `${Math.round(passed / results.length * 100)}%`\n    },\n    tests: results,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Generate Test Payloads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Test Payloads": {
+      "main": [
+        [
+          {
+            "node": "Split Into Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Into Batches": {
+      "main": [
+        [
+          {
+            "node": "Execute Test",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Summarize Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Test": {
+      "main": [
+        [
+          {
+            "node": "Collect Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Results": {
+      "main": [
+        [
+          {
+            "node": "Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop": {
+      "main": [
+        [
+          {
+            "node": "Split Into Batches",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Bucharest",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "pinData": {},
+  "triggerCount": 0,
+  "meta": null
+}

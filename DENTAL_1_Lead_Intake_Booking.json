@@ -1,0 +1,1027 @@
+{
+  "name": "DENTAL 1 - Lead Intake & Booking",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "dental/lead/webform",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-webform",
+      "name": "Webhook Webform",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        256,
+        208
+      ],
+      "webhookId": "dental-lead-webform",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "dental/lead/missed-call",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-missed",
+      "name": "Webhook Missed Call",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        256,
+        400
+      ],
+      "webhookId": "dental-lead-missed",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "dental/lead/meta",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-meta",
+      "name": "Webhook Meta",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        256,
+        608
+      ],
+      "webhookId": "dental-lead-meta",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "source",
+              "name": "source",
+              "value": "webform",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "set-source-webform",
+      "name": "Set Source Webform",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        464,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "source",
+              "name": "source",
+              "value": "missed_call",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "set-source-missed",
+      "name": "Set Source Missed",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        464,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "source",
+              "name": "source",
+              "value": "meta",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "set-source-meta",
+      "name": "Set Source Meta",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        464,
+        608
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "merge-sources",
+      "name": "Merge Sources",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.1,
+      "position": [
+        656,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize lead data from any source\nconst data = $input.first().json;\n\n// Generate unique lead ID\nconst leadId = 'LEAD-' + Date.now().toString(36).toUpperCase();\n\n// Extract and normalize fields\nconst normalized = {\n  lead_id: leadId,\n  source: data.source || 'unknown',\n  created_at: new Date().toISOString(),\n  \n  // Contact info - handle various field names from different sources\n  name: data.body?.name || data.name || data.caller_name || data.full_name || '',\n  phone: String(data.body?.phone || data.phone || data.caller_number || data.phone_number || '').replace(/[^0-9+]/g, ''),\n  email: (data.body?.email || data.email || '').toLowerCase().trim(),\n  \n  // Preferences\n  language: data.body?.language || data.language || 'ro',\n  procedure_interest: data.body?.procedure || data.procedure_interest || data.service || 'Consultatie generala',\n  notes: data.body?.message || data.message || data.notes || '',\n  preferred_slots: data.body?.preferred_time || data.preferred_slots || '',\n  \n  // Status tracking\n  status: 'new',\n  is_duplicate: false,\n  \n  // Original payload for debugging\n  original_payload: JSON.stringify(data).substring(0, 500)\n};\n\nreturn [{ json: normalized }];"
+      },
+      "id": "normalize-lead",
+      "name": "Normalize Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        864,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1PiSRv8QQmeQGPdcHLVQ7KRJuAbAxoLElzDa8B52nP_4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Leads"
+        },
+        "filtersUI": {
+          "values": []
+        },
+        "options": {}
+      },
+      "id": "check-duplicate",
+      "name": "Check Duplicate",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1056,
+        400
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JxQN1tszvOquCqhF",
+          "name": "Dental Clinic CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check for duplicates within last 7 days\nconst currentLead = $('Normalize Lead').first().json;\nconst existingLeads = $input.all().map(i => i.json);\n\nconst sevenDaysAgo = new Date();\nsevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);\n\n// Find matching lead by phone or email within 7 days\nlet duplicateLead = null;\nfor (const lead of existingLeads) {\n  if (!lead.created_at || lead.created_at.trim() === '' || lead.created_at === ' ') continue;\n  \n  const leadDate = new Date(lead.created_at);\n  if (isNaN(leadDate.getTime()) || leadDate < sevenDaysAgo) continue;\n  \n  // Safely convert phone to string and clean\n  const currentPhone = String(currentLead.phone || '').replace(/\\D/g, '');\n  const leadPhone = String(lead.phone || '').replace(/\\D/g, '');\n  \n  const phoneMatch = currentPhone && leadPhone && currentPhone === leadPhone;\n  \n  // Safely compare emails\n  const currentEmail = String(currentLead.email || '').toLowerCase().trim();\n  const leadEmail = String(lead.email || '').toLowerCase().trim();\n  \n  const emailMatch = currentEmail && leadEmail && currentEmail === leadEmail;\n  \n  if (phoneMatch || emailMatch) {\n    duplicateLead = lead;\n    break;\n  }\n}\n\nreturn [{\n  json: {\n    ...currentLead,\n    is_duplicate: !!duplicateLead,\n    existing_lead_id: duplicateLead?.lead_id || null,\n    existing_row_number: duplicateLead?.row_number || null\n  }\n}];"
+      },
+      "id": "filter-duplicates",
+      "name": "Filter Duplicates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1264,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "dup-check",
+              "leftValue": "={{ $json.is_duplicate }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-duplicate",
+      "name": "Is Duplicate?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1456,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1PiSRv8QQmeQGPdcHLVQ7KRJuAbAxoLElzDa8B52nP_4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Leads"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "lead_id": "={{ $json.existing_lead_id }}",
+            "notes": "=[DUPLICATE {{ $now.toISO() }}] {{ $json.notes }}",
+            "status": "contacted",
+            "row_number": 0
+          },
+          "matchingColumns": [
+            "lead_id"
+          ],
+          "schema": [
+            {
+              "id": "lead_id",
+              "displayName": "lead_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "language",
+              "displayName": "language",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "procedure_interest",
+              "displayName": "procedure_interest",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "preferred_slots",
+              "displayName": "preferred_slots",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "is_duplicate",
+              "displayName": "is_duplicate",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "review_requested_at",
+              "displayName": "review_requested_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "review_status",
+              "displayName": "review_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "original_payload",
+              "displayName": "original_payload",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "existing_lead_id",
+              "displayName": "existing_lead_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "existing_row_number",
+              "displayName": "existing_row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED"
+        }
+      },
+      "id": "update-existing",
+      "name": "Update Existing Lead",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1664,
+        304
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JxQN1tszvOquCqhF",
+          "name": "Dental Clinic CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1PiSRv8QQmeQGPdcHLVQ7KRJuAbAxoLElzDa8B52nP_4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Leads"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "id": "append-new",
+      "name": "Append New Lead",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1664,
+        512
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JxQN1tszvOquCqhF",
+          "name": "Dental Clinic CRM"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "merge-after-sheets",
+      "name": "Merge After Sheets",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.1,
+      "position": [
+        1856,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "lucian.ianus05@gmail.com",
+        "toEmail": "lucian.ianus05@gmail.com",
+        "subject": "=Solicitare noua: {{ $json.name || 'Pacient' }} - {{ $json.procedure_interest || 'Consultatie' }}",
+        "html": "=<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"UTF-8\">\n</head>\n<body style=\"font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333;\">\n  <div style=\"max-width: 600px; margin: 0 auto; padding: 20px;\">\n    <div style=\"background: linear-gradient(135deg, #2c5aa0 0%, #1e3a5f 100%); color: white; padding: 25px; border-radius: 8px 8px 0 0;\">\n      <h1 style=\"margin: 0; font-size: 22px;\">📋 Solicitare Nouă Primită</h1>\n    </div>\n    <div style=\"background: #ffffff; padding: 25px; border: 1px solid #e0e0e0;\">\n      <div style=\"padding: 12px 0; border-bottom: 1px solid #f0f0f0;\">\n        <div style=\"color: #666; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;\">Nume pacient</div>\n        <div style=\"color: #333; font-size: 15px; font-weight: 500; margin-top: 4px;\">{{ $json.name || 'Nespecificat' }}</div>\n      </div>\n      <div style=\"padding: 12px 0; border-bottom: 1px solid #f0f0f0;\">\n        <div style=\"color: #666; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;\">Telefon</div>\n        <div style=\"color: #333; font-size: 15px; font-weight: 500; margin-top: 4px;\">{{ $json.phone || 'Nespecificat' }}</div>\n      </div>\n      <div style=\"padding: 12px 0; border-bottom: 1px solid #f0f0f0;\">\n        <div style=\"color: #666; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;\">Email</div>\n        <div style=\"color: #333; font-size: 15px; font-weight: 500; margin-top: 4px;\">{{ $json.email || 'Nespecificat' }}</div>\n      </div>\n      <div style=\"padding: 12px 0; border-bottom: 1px solid #f0f0f0;\">\n        <div style=\"color: #666; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;\">Serviciu solicitat</div>\n        <div style=\"color: #333; font-size: 15px; font-weight: 500; margin-top: 4px;\">{{ $json.procedure_interest || 'Consultație generală' }}</div>\n      </div>\n      <div style=\"padding: 12px 0; border-bottom: 1px solid #f0f0f0;\">\n        <div style=\"color: #666; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;\">Sursă</div>\n        <div style=\"color: #333; font-size: 15px; font-weight: 500; margin-top: 4px;\">{{ $json.source === 'webform' ? 'Formular website' : $json.source === 'missed_call' ? 'Apel pierdut' : $json.source === 'meta' ? 'Facebook/Instagram' : $json.source }}</div>\n      </div>\n      <div style=\"padding: 12px 0; border-bottom: 1px solid #f0f0f0;\">\n        <div style=\"color: #666; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;\">Mesaj</div>\n        <div style=\"color: #333; font-size: 15px; font-weight: 500; margin-top: 4px;\">{{ $json.notes || 'Fără mesaj adițional' }}</div>\n      </div>\n      <div style=\"padding: 12px 0;\">\n        <div style=\"color: #666; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;\">Status</div>\n        <div style=\"margin-top: 4px;\">\n          <span style=\"display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; background: {{ $json.is_duplicate ? '#fff3e0' : '#e8f5e9' }}; color: {{ $json.is_duplicate ? '#f57c00' : '#2e7d32' }};\">\n            {{ $json.is_duplicate ? 'Actualizare lead existent' : 'Lead nou' }}\n          </span>\n        </div>\n      </div>\n      \n      <div style=\"background: #e3f2fd; border-left: 4px solid #2196f3; padding: 15px; margin: 20px 0; border-radius: 0 8px 8px 0;\">\n        <strong>📊 Acces Rapid la Date:</strong><br>\n        <a href=\"https://docs.google.com/spreadsheets/d/1PiSRv8QQmeQGPdcHLVQ7KRJuAbAxoLElzDa8B52nP_4/edit#gid=0\" style=\"color: #1976d2; font-weight: 600; text-decoration: none;\">\n          Deschide CRM-ul Dental Clinic →\n        </a>\n      </div>\n    </div>\n    <div style=\"background: #f8f9fa; padding: 15px 25px; border-radius: 0 0 8px 8px; font-size: 12px; color: #666; border: 1px solid #e0e0e0; border-top: none;\">\n      ID: {{ $json.lead_id }} • Primit: {{ $json.created_at }}\n    </div>\n  </div>\n</body>\n</html>",
+        "options": {}
+      },
+      "id": "email-staff",
+      "name": "Email Staff Notification",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        2064,
+        400
+      ],
+      "webhookId": "b5243d80-891d-4d18-ab57-a59e553e8bab",
+      "credentials": {
+        "smtp": {
+          "id": "5LzvM8OsCy15sEku",
+          "name": "SMTP account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "email-check",
+              "leftValue": "={{ $json.email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-has-email",
+      "name": "Has Email?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2256,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "lang-en",
+                    "leftValue": "={{ $json.language }}",
+                    "rightValue": "en",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "English"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "lang-ro",
+                    "leftValue": "={{ $json.language }}",
+                    "rightValue": "ro",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Romanian"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "switch-language",
+      "name": "Select Language",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        2464,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "lucian.ianus05@gmail.com",
+        "toEmail": "={{ $json.email }}",
+        "subject": "=Schedule Your Appointment - Dental Studio",
+        "html": "=<!DOCTYPE html>\n<html>\n<head><meta charset=\"UTF-8\">\n  <style>\n    body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.7; color: #333; margin: 0; padding: 0; background-color: #f5f5f5; }\n    .container { max-width: 600px; margin: 0 auto; background: #ffffff; }\n    .header { background: linear-gradient(135deg, #2c5aa0 0%, #1e3a5f 100%); color: white; padding: 35px 30px; text-align: center; }\n    .header h1 { margin: 0; font-size: 26px; font-weight: 300; }\n    .header .subtitle { margin-top: 8px; opacity: 0.9; font-size: 14px; }\n    .content { padding: 35px 30px; }\n    .greeting { font-size: 18px; color: #2c5aa0; margin-bottom: 20px; }\n    .message { color: #555; font-size: 15px; }\n    .cta-container { text-align: center; margin: 30px 0; }\n    .cta-button { display: inline-block; background: #ff6d5a; color: white !important; padding: 16px 40px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 18px; }\n    .info-box { background: #f8f9fa; border-left: 4px solid #2c5aa0; padding: 20px; margin: 25px 0; border-radius: 0 8px 8px 0; }\n    .footer { background: #f8f9fa; padding: 25px 30px; text-align: center; border-top: 1px solid #e0e0e0; }\n    .footer p { margin: 5px 0; color: #666; font-size: 13px; }\n  </style>\n</head>\n<body>\n  <div class=\"container\">\n    <div class=\"header\">\n      <h1>Dental Studio</h1>\n      <div class=\"subtitle\">Your smile, our priority</div>\n    </div>\n    <div class=\"content\">\n      <div class=\"greeting\">Hello, {{ $json.name || 'dear patient' }}!</div>\n      <div class=\"message\">\n        <p>Thank you for your interest in our clinic. We received your request and we're ready to welcome you!</p>\n        <p><strong>Book your appointment now</strong> by clicking the button below. Choose your preferred date and time, and we'll confirm your spot instantly.</p>\n        <div class=\"cta-container\">\n          <a href=\"https://zappai.app.n8n.cloud/form/dental-schedule?lead_id={{ $json.lead_id }}&name={{ encodeURIComponent($json.name || '') }}&email={{ encodeURIComponent($json.email || '') }}&phone={{ $json.phone || '' }}&source={{ $json.source || '' }}&language=en\" class=\"cta-button\">Schedule Your Appointment</a>\n        </div>\n        <div class=\"info-box\">\n          <p><strong>What to expect:</strong></p>\n          <ul style=\"margin: 8px 0; padding-left: 20px;\">\n            <li>Choose from available time slots</li>\n            <li>Instant confirmation by email</li>\n            <li>Automatic reminder before your visit</li>\n          </ul>\n        </div>\n        <p>Have urgent questions? Don't hesitate to call us directly for immediate assistance.</p>\n        <p style=\"margin-top: 25px;\">Best regards,<br><strong>Dental Studio Team</strong></p>\n      </div>\n    </div>\n    <div class=\"footer\">\n      <p><strong>Dental Studio</strong></p>\n      <p>Appointments: Monday - Friday, 09:00 - 18:00</p>\n    </div>\n  </div>\n</body>\n</html>",
+        "options": {}
+      },
+      "id": "email-lead-en",
+      "name": "Email Lead EN",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        2656,
+        208
+      ],
+      "webhookId": "7866a0f4-7b7f-43ab-ad3b-73ebeb31ff87",
+      "credentials": {
+        "smtp": {
+          "id": "5LzvM8OsCy15sEku",
+          "name": "SMTP account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "fromEmail": "lucian.ianus05@gmail.com",
+        "toEmail": "={{ $json.email }}",
+        "subject": "=Programeaza-ti vizita - Dental Studio",
+        "html": "=<!DOCTYPE html>\n<html>\n<head><meta charset=\"UTF-8\">\n  <style>\n    body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.7; color: #333; margin: 0; padding: 0; background-color: #f5f5f5; }\n    .container { max-width: 600px; margin: 0 auto; background: #ffffff; }\n    .header { background: linear-gradient(135deg, #2c5aa0 0%, #1e3a5f 100%); color: white; padding: 35px 30px; text-align: center; }\n    .header h1 { margin: 0; font-size: 26px; font-weight: 300; }\n    .header .subtitle { margin-top: 8px; opacity: 0.9; font-size: 14px; }\n    .content { padding: 35px 30px; }\n    .greeting { font-size: 18px; color: #2c5aa0; margin-bottom: 20px; }\n    .message { color: #555; font-size: 15px; }\n    .cta-container { text-align: center; margin: 30px 0; }\n    .cta-button { display: inline-block; background: #ff6d5a; color: white !important; padding: 16px 40px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 18px; }\n    .info-box { background: #f8f9fa; border-left: 4px solid #2c5aa0; padding: 20px; margin: 25px 0; border-radius: 0 8px 8px 0; }\n    .footer { background: #f8f9fa; padding: 25px 30px; text-align: center; border-top: 1px solid #e0e0e0; }\n    .footer p { margin: 5px 0; color: #666; font-size: 13px; }\n  </style>\n</head>\n<body>\n  <div class=\"container\">\n    <div class=\"header\">\n      <h1>Dental Studio</h1>\n      <div class=\"subtitle\">Zambetul tau, prioritatea noastra</div>\n    </div>\n    <div class=\"content\">\n      <div class=\"greeting\">Buna ziua, {{ $json.name || 'draga pacient' }}!</div>\n      <div class=\"message\">\n        <p>Va multumim pentru interesul acordat clinicii noastre. Am primit solicitarea dumneavoastra si suntem pregatiti sa va primim!</p>\n        <p><strong>Programati-va vizita acum</strong> facand click pe butonul de mai jos. Alegeti data si ora dorita, iar noi va confirmam locul instant.</p>\n        <div class=\"cta-container\">\n          <a href=\"https://zappai.app.n8n.cloud/form/dental-schedule?lead_id={{ $json.lead_id }}&name={{ encodeURIComponent($json.name || '') }}&email={{ encodeURIComponent($json.email || '') }}&phone={{ $json.phone || '' }}&source={{ $json.source || '' }}&language=ro\" class=\"cta-button\">Programeaza Vizita</a>\n        </div>\n        <div class=\"info-box\">\n          <p><strong>Ce va asteapta:</strong></p>\n          <ul style=\"margin: 8px 0; padding-left: 20px;\">\n            <li>Alegeti din intervalele orare disponibile</li>\n            <li>Confirmare instantanee prin email</li>\n            <li>Reminder automat inainte de vizita</li>\n          </ul>\n        </div>\n        <p>Aveti intrebari urgente? Nu ezitati sa ne contactati direct la telefon pentru asistenta imediata.</p>\n        <p style=\"margin-top: 25px;\">Cu stima,<br><strong>Echipa Dental Studio</strong></p>\n      </div>\n    </div>\n    <div class=\"footer\">\n      <p><strong>Dental Studio</strong></p>\n      <p>Programari: Luni - Vineri, 09:00 - 18:00</p>\n    </div>\n  </div>\n</body>\n</html>",
+        "options": {}
+      },
+      "id": "email-lead-ro",
+      "name": "Email Lead RO",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        2656,
+        400
+      ],
+      "webhookId": "3fe55138-3e4e-4555-bfa9-7ac2a2a42442",
+      "credentials": {
+        "smtp": {
+          "id": "5LzvM8OsCy15sEku",
+          "name": "SMTP account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"success\": true, \"lead_id\": \"{{ $json.lead_id }}\", \"message\": \"Lead received successfully\"}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2864,
+        400
+      ]
+    },
+    {
+      "id": "ai-qualify-lead",
+      "name": "AI Lead Qualification",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [
+        920,
+        400
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "=Analizează următorul lead pentru o clinică dentară și determină calitatea și urgența.\n\nDATELE LEAD-ULUI:\n- Nume: {{ $json.name }}\n- Telefon: {{ $json.phone }}\n- Email: {{ $json.email }}\n- Sursă: {{ $json.source }}\n- Procedură de interes: {{ $json.procedure_interest }}\n- Mesaj/Note: {{ $json.notes }}\n- Ore preferate: {{ $json.preferred_slots }}\n- Limbă: {{ $json.language }}\n\nRETURNEAZĂ UN OBIECT JSON cu următoarele câmpuri (DOAR JSON, fără explicații):\n{\n  \"quality_score\": <număr 1-10>,\n  \"urgency\": \"<high|medium|low>\",\n  \"lead_type\": \"<hot|warm|cold>\",\n  \"recommended_action\": \"<acțiunea recomandată în română>\",\n  \"key_insights\": \"<observații cheie în română, max 2 propoziții>\"\n}\n\nCRITERII DE EVALUARE:\n- Score 8-10 (HOT): Procedură specifică menționată, date complete, mesaj detaliat\n- Score 5-7 (WARM): Date parțiale, interes general\n- Score 1-4 (COLD): Date minime, fără procedură specifică\n\nURGENȚA:\n- HIGH: Menționează durere, urgență, tratament început\n- MEDIUM: Procedură electivă (albire, implant)\n- LOW: Consultație generală, control"
+      }
+    },
+    {
+      "id": "parse-qualification",
+      "name": "Parse AI Qualification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        400
+      ],
+      "parameters": {
+        "jsCode": "// Parse AI qualification and merge with lead data\nconst leadData = $('Normalize Lead').first().json;\nconst aiOutput = $json.output || '{}';\n\nlet qualification = {};\ntry {\n  // Extract JSON from AI response\n  const jsonMatch = aiOutput.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    qualification = JSON.parse(jsonMatch[0]);\n  }\n} catch (e) {\n  qualification = {\n    quality_score: 5,\n    urgency: 'medium',\n    lead_type: 'warm',\n    recommended_action: 'Contactare standard',\n    key_insights: 'Nu s-a putut analiza automat'\n  };\n}\n\nreturn [{\n  json: {\n    ...leadData,\n    ai_quality_score: qualification.quality_score || 5,\n    ai_urgency: qualification.urgency || 'medium',\n    ai_lead_type: qualification.lead_type || 'warm',\n    ai_recommended_action: qualification.recommended_action || '',\n    ai_insights: qualification.key_insights || ''\n  }\n}];"
+      }
+    },
+    {
+      "id": "openai-qualify",
+      "name": "OpenAI GPT-5.2",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        920,
+        200
+      ],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gpt-5.2"
+        },
+        "options": {
+          "temperature": 0.7
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Webform": {
+      "main": [
+        [
+          {
+            "node": "Set Source Webform",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Missed Call": {
+      "main": [
+        [
+          {
+            "node": "Set Source Missed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Meta": {
+      "main": [
+        [
+          {
+            "node": "Set Source Meta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Source Webform": {
+      "main": [
+        [
+          {
+            "node": "Merge Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Source Missed": {
+      "main": [
+        [
+          {
+            "node": "Merge Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Source Meta": {
+      "main": [
+        [
+          {
+            "node": "Merge Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Sources": {
+      "main": [
+        [
+          {
+            "node": "Normalize Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Duplicate": {
+      "main": [
+        [
+          {
+            "node": "Filter Duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Duplicates": {
+      "main": [
+        [
+          {
+            "node": "Is Duplicate?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Duplicate?": {
+      "main": [
+        [
+          {
+            "node": "Update Existing Lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Append New Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Existing Lead": {
+      "main": [
+        [
+          {
+            "node": "Merge After Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append New Lead": {
+      "main": [
+        [
+          {
+            "node": "Merge After Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge After Sheets": {
+      "main": [
+        [
+          {
+            "node": "Email Staff Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Staff Notification": {
+      "main": [
+        [
+          {
+            "node": "Has Email?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Email?": {
+      "main": [
+        [
+          {
+            "node": "Select Language",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Language": {
+      "main": [
+        [
+          {
+            "node": "Email Lead EN",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Email Lead RO",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Email Lead RO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Lead EN": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Lead RO": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Lead Qualification": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Qualification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI GPT-5.2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Lead Qualification",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Lead": {
+      "main": [
+        [
+          {
+            "node": "AI Lead Qualification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Qualification": {
+      "main": [
+        [
+          {
+            "node": "Check Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Bucharest",
+    "errorWorkflow": "xXxInMLlLr07vHfJ",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed"
+  },
+  "staticData": null,
+  "pinData": {},
+  "triggerCount": 3,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}
