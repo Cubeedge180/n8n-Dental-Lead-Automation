@@ -1,156 +1,170 @@
 # Dental Clinic Automation
 
-An AI-powered n8n automation system that manages the complete patient lifecycle for dental clinics — from lead intake to appointment scheduling, reminders, reviews, no-show recovery, and weekly management reporting. All workflows are interconnected and production-ready.
+A full-stack AI automation system that runs the entire patient lifecycle at a dental clinic — from the moment a lead comes in to the weekly management report. Built with **n8n** and **OpenAI GPT-5.2**, the system replaces manual front-desk work with 7 interconnected workflows that handle intake, scheduling, reminders, follow-ups, reviews, no-show recovery, and reporting.
 
-## System Architecture
+> **110+ automation nodes · 7 production workflows · Zero manual intervention**
+
+---
+
+## What It Does
+
+### 1. Captures Leads From Every Channel
+
+New patients arrive through three different entry points — a **website form**, **Meta/Facebook ad leads**, and **missed phone calls**. Each source triggers a webhook that feeds into a single unified pipeline. The system normalizes the data, deduplicates against existing records (merging if found), and stores everything in a central Google Sheet.
+
+### 2. Qualifies Leads With AI
+
+Every incoming lead is scored by **OpenAI GPT-5.2**. The AI evaluates the patient's needs, urgency, and fit based on the intake data, then assigns a qualification score (0–100) with reasoning notes. Staff receive an instant email notification with the AI assessment so they know exactly who to prioritize.
+
+### 3. Books Appointments via Patient-Facing Form
+
+Qualified leads are directed to a booking form (built with n8n Form Trigger). The system checks slot availability against existing appointments, creates the booking in both **Google Sheets** and **Google Calendar**, and sends an AI-personalized confirmation email to the patient. WhatsApp confirmation is pre-built and ready to enable.
+
+### 4. Sends Smart Reminders & Manages the Waitlist
+
+Once an appointment is booked, the system automatically schedules a **2-hour pre-appointment reminder**. Patients can confirm or cancel via one-click webhook links. If a patient cancels, the system immediately checks the waitlist and offers the now-open slot to the next person in queue — fully automated.
+
+### 5. Requests Reviews After Visits
+
+One hour after a completed appointment, the patient receives an **AI-personalized review request email**. The message is tailored to their specific visit details (procedure, duration, dentist) to maximize response rates and feel genuinely personal, not templated.
+
+### 6. Recovers No-Shows & Reactivates Dormant Patients
+
+Two automated campaigns run on schedules:
+- **Daily**: Scans for no-shows from the previous day and sends AI-crafted reschedule emails
+- **Weekly**: Identifies patients who haven't visited in **6+ months** and sends reactivation outreach to bring them back
+
+### 7. Delivers Weekly Management Reports
+
+Every Monday morning, the system pulls all lead and appointment data, calculates KPIs (conversion rates, booking volume, no-show rates, revenue trends), and has **OpenAI generate actionable business insights**. The report is sent as a formatted HTML email to the clinic manager.
+
+### 8. Self-Monitors With an Error Handler
+
+A centralized error handler catches failures across all workflows. When something breaks, it logs the error to Google Sheets, runs **AI-powered root cause analysis** on the failure, and sends a diagnostic alert to staff — so issues get caught and explained before they snowball.
+
+---
+
+## Architecture
 
 ```
-  New Lead Arrives                    Patient Books Appointment
-  (Webform / Meta / Missed Call)      (Scheduling Form)
-        │                                      │
-        ▼                                      ▼
-┌──────────────────────┐          ┌──────────────────────────┐
-│  DENTAL 1            │          │  DENTAL 6                │
-│  Lead Intake &       │──────▶───│  Appointment Scheduling  │
-│  AI Qualification    │          │  + Google Calendar Sync   │
-└──────────┬───────────┘          └──────────┬───────────────┘
-           │                                 │
-           ▼                                 ▼
-┌──────────────────────┐          ┌──────────────────────────┐
-│  DENTAL 2            │          │  DENTAL 4                │
-│  Reminders &         │◀─────────│  No-Show Reschedule &    │
-│  Waitlist Management │          │  Patient Reactivation    │
-└──────────┬───────────┘          └──────────────────────────┘
-           │
-           ▼
-┌──────────────────────┐          ┌──────────────────────────┐
-│  DENTAL 3            │          │  DENTAL 5                │
-│  AI-Personalized     │          │  Weekly Management       │
-│  Review Requests     │          │  Reporting + AI Insights │
-└──────────────────────┘          └──────────────────────────┘
+  Patient Touchpoints                         Clinic Operations
+  ─────────────────                           ─────────────────
 
-           ┌──────────────────────────┐
-           │  DENTAL 0                │
-           │  Error Handler           │
-           │  (monitors all workflows)│
-           └──────────────────────────┘
+  Website Form ──┐
+  Meta/FB Ads ───┤──▶ LEAD INTAKE ──▶ AI QUALIFICATION ──▶ Staff Alert
+  Missed Calls ──┘         │
+                           ▼
+                    APPOINTMENT BOOKING ──▶ Google Calendar Sync
+                           │
+                    ┌──────┼──────┐
+                    ▼      ▼      ▼
+              REMINDERS  WAITLIST  CONFIRMATION
+              (2h prior)  (auto)   (AI email + WhatsApp)
+                    │
+                    ▼
+             VISIT COMPLETED ──▶ AI REVIEW REQUEST (1h post)
+                    │
+              ┌─────┴─────┐
+              ▼           ▼
+         NO-SHOW      INACTIVE 6mo+
+        RESCHEDULE     REACTIVATION
+        (daily)        (weekly)
+
+              ──── WEEKLY KPI REPORT ────
+              (every Monday, AI insights)
+
+         ┌────── ERROR HANDLER ──────┐
+         │  monitors all workflows   │
+         │  AI diagnosis + alerts    │
+         └───────────────────────────┘
 ```
 
-## Workflows
-
-| # | Workflow | Description | Nodes | Key Integrations |
-|---|----------|-------------|-------|------------------|
-| 0 | **Error Handler** | Catches failures across all workflows, logs to Google Sheets, sends AI-diagnosed alerts via email | 9 | OpenAI, Google Sheets, Email |
-| 1 | **Lead Intake & Booking** | Multi-channel lead capture (webform, Meta ads, missed calls), deduplication, AI qualification scoring, bilingual confirmation (EN/RO) | 23 | OpenAI, Google Sheets, Webhooks, Email |
-| 2 | **Reminders & Waitlist** | Automated 2h pre-appointment reminders, confirmation tracking, cancellation handling with automatic waitlist promotion | 26 | Google Sheets, Webhooks, Email |
-| 3 | **Review Request** | Sends AI-personalized review request emails 1 hour after appointment completion | 10 | OpenAI, Google Sheets, Email |
-| 4 | **No-Show & Reactivation** | Daily no-show detection with reschedule emails + weekly reactivation campaigns for patients inactive 6+ months | 16 | OpenAI, Google Sheets, Email |
-| 5 | **Management Reporting** | Automated weekly KPI dashboard with AI-generated insights on lead conversion, appointment trends, and revenue | 8 | OpenAI, Google Sheets, Email |
-| 6 | **Appointment Scheduling** | Patient-facing booking form with slot verification, Google Calendar sync, WhatsApp notifications (ready to enable), AI-personalized confirmations | 18 | OpenAI, Google Sheets, Google Calendar, WhatsApp, Email |
-| — | **Test Harness** | End-to-end testing workflow for validating the entire system | — | — |
-
-**Total: 110+ nodes across 8 interconnected workflows**
-
-## Key Features
-
-- **Multi-Channel Lead Capture** — Webforms, Meta/Facebook ads, and missed calls all funnel into a unified pipeline
-- **AI-Powered Qualification** — OpenAI GPT-5.2 scores and qualifies leads automatically
-- **Smart Deduplication** — Prevents duplicate entries with automatic merge of existing records
-- **Bilingual Support** — Patient communications in English and Romanian
-- **Automated Appointment Lifecycle** — Booking → Confirmation → Reminder → Follow-up → Review
-- **No-Show Recovery** — Daily automated detection and AI-personalized reschedule outreach
-- **Patient Reactivation** — Weekly campaigns targeting patients inactive for 6+ months
-- **Waitlist Management** — Cancelled slots automatically offered to next patient on the waitlist
-- **AI-Personalized Communications** — Every patient-facing email is dynamically generated by AI
-- **Weekly KPI Reports** — Automated management dashboards with AI-driven business insights
-- **Error Resilience** — Centralized error handler with AI-assisted diagnosis across all workflows
-- **Google Calendar Sync** — Appointments automatically synced to staff calendars
+---
 
 ## Tech Stack
 
-| Technology | Purpose |
-|-----------|---------|
-| **n8n** | Workflow automation platform |
-| **OpenAI GPT-5.2** | Lead qualification, email personalization, report insights, error diagnosis |
-| **Google Sheets** | Central data store for leads, appointments, and logs |
-| **Google Calendar** | Appointment scheduling and staff calendar sync |
-| **Email (SMTP)** | Patient and staff notifications |
-| **WhatsApp Business** | Booking confirmations (ready to enable) |
-| **Webhooks** | Multi-channel lead intake and event triggers |
+| Component | Technology | Role |
+|-----------|-----------|------|
+| Automation Engine | **n8n** | Orchestrates all workflows, webhooks, and scheduling |
+| AI Layer | **OpenAI GPT-5.2** | Lead qualification, email personalization, report insights, error diagnosis |
+| Data Store | **Google Sheets** | Leads, appointments, waitlist, error logs ([schema →](docs/GOOGLE_SHEETS_SCHEMA.md)) |
+| Calendar | **Google Calendar** | Staff appointment sync |
+| Email | **SMTP** | All patient and staff communications |
+| Messaging | **WhatsApp Business** | Booking confirmations (pre-built, enable when ready) |
+| Triggers | **Webhooks** | Multi-channel lead intake and patient actions |
 
-## Project Structure
+---
+
+## Repository Structure
 
 ```
-├── DENTAL_0_Error_Handler.json                          # Cross-workflow error monitoring
-├── DENTAL_1_Lead_Intake_Booking.json                    # Multi-channel lead capture & AI qualification
-├── DENTAL_2_Reminders_Waitlist.json                     # Appointment reminders & waitlist
-├── DENTAL_3_Review_Request.json                         # Post-visit AI review requests
-├── DENTAL_4_No_Show_Reschedule_Patient_Reactivation.json # No-show recovery & reactivation
-├── DENTAL_5_Management_Reporting.json                   # Weekly KPI reports & AI insights
-├── DENTAL_6_Appointment_Scheduling_Form.json            # Patient booking form & calendar sync
-├── DENTAL_Test_Harness.json                             # End-to-end system testing
-├── README.md
-└── LICENSE
+├── workflows/                        # n8n workflow definitions (import into n8n)
+│   ├── DENTAL_0_Error_Handler.json
+│   ├── DENTAL_1_Lead_Intake_Booking.json
+│   ├── DENTAL_2_Reminders_Waitlist.json
+│   ├── DENTAL_3_Review_Request.json
+│   ├── DENTAL_4_No_Show_Reschedule_Patient_Reactivation.json
+│   ├── DENTAL_5_Management_Reporting.json
+│   ├── DENTAL_6_Appointment_Scheduling_Form.json
+│   └── DENTAL_Test_Harness.json
+├── docs/
+│   └── GOOGLE_SHEETS_SCHEMA.md       # Data model documentation
+├── .env.example                      # Required credentials template
+├── .gitignore
+├── LICENSE
+└── README.md
 ```
 
-## Setup
+---
+
+## Getting Started
 
 ### Prerequisites
 
-- An [n8n](https://n8n.io) instance (cloud or self-hosted)
-- OpenAI API key (GPT-5.2)
-- Google Sheets API credentials
-- Google Calendar API credentials
-- SMTP email account
+- [n8n](https://n8n.io) instance (cloud or self-hosted)
+- OpenAI API key
+- Google Cloud project with Sheets + Calendar APIs enabled
+- SMTP email account (Gmail App Password works)
 - *(Optional)* WhatsApp Business API credentials
 
-### Installation
+### Setup
 
-1. **Clone the repository**
+1. **Clone**
    ```bash
    git clone https://github.com/Cubeedge180/Dental-Clinic-Automation.git
+   cd Dental-Clinic-Automation
    ```
 
-2. **Import workflows into n8n**
-   - Open your n8n instance
-   - Go to **Workflows** → **Import from File**
-   - Import each `DENTAL_*.json` file in order (0 → 6)
+2. **Configure credentials**
+   ```bash
+   cp .env.example .env
+   # Fill in your API keys and credentials
+   ```
 
-3. **Configure credentials**
-   - Set up OpenAI, Google Sheets, Google Calendar, and SMTP credentials in n8n
+3. **Prepare Google Sheets**
+   - Create a new Google Spreadsheet
+   - Add tabs: `Leads`, `Appointments`, `Waitlist`, `Error_Log`
+   - Follow the schema in [`docs/GOOGLE_SHEETS_SCHEMA.md`](docs/GOOGLE_SHEETS_SCHEMA.md)
+
+4. **Import workflows into n8n**
+   - Go to **Workflows → Import from File**
+   - Import each file from `workflows/` in order (0 → 6)
+   - Set up credentials (OpenAI, Google Sheets, Google Calendar, SMTP) in n8n
    - Update webhook URLs to match your n8n instance
 
-4. **Set up the data layer**
-   - Create a Google Sheet with tabs: `Leads`, `Appointments`, `Error_Log`
-   - Update the Google Sheets node references in each workflow
+5. **Activate**
+   - Enable `DENTAL 0 - Error Handler` first (always on)
+   - Activate workflows 1–6
+   - Run `DENTAL_Test_Harness` to validate the pipeline end-to-end
 
-5. **Activate workflows**
-   - Start with `DENTAL 0 - Error Handler` (always active)
-   - Then activate workflows 1–6 in order
-   - Use `DENTAL_Test_Harness` to validate the full pipeline
+---
 
-## Workflow Details
+## Bilingual Support
 
-### DENTAL 1 — Lead Intake & Booking
-Captures leads from three channels (webform, Meta ads, missed calls), normalizes the data, checks for duplicates, and runs AI qualification. Qualified leads receive bilingual confirmation emails (EN/RO), and staff are notified immediately.
+All patient-facing emails support **English** and **Romanian**, automatically selected based on the lead's language preference captured during intake.
 
-### DENTAL 2 — Reminders & Waitlist
-When an appointment is confirmed, a 2-hour pre-appointment reminder is automatically scheduled. Patients can confirm or cancel via webhook links. Cancellations trigger automatic waitlist promotion — the next patient in the queue is instantly offered the open slot.
-
-### DENTAL 3 — Review Request
-One hour after a completed appointment, patients receive an AI-personalized email asking for a review. The message is tailored based on their visit details to maximize response rates.
-
-### DENTAL 4 — No-Show & Reactivation
-Runs two automated campaigns:
-- **Daily**: Detects no-shows and sends AI-crafted reschedule emails
-- **Weekly**: Identifies patients who haven't visited in 6+ months and sends reactivation outreach
-
-### DENTAL 5 — Management Reporting
-Every Monday, automatically generates a comprehensive KPI report including lead conversion rates, appointment metrics, and revenue trends. OpenAI analyzes the data and provides actionable business insights.
-
-### DENTAL 6 — Appointment Scheduling Form
-A patient-facing booking form that verifies slot availability, creates the appointment in Google Sheets and Google Calendar, and sends AI-personalized confirmation emails. WhatsApp notifications are pre-built and ready to enable.
+---
 
 ## License
 
-MIT License — see [LICENSE](LICENSE) for details.
+MIT — see [LICENSE](LICENSE) for details.

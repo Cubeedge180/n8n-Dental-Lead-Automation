@@ -1,0 +1,19 @@
+# Environment & secrets
+.env
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Dependencies
+node_modules/
+venv/
+__pycache__/
+*.pyc
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
