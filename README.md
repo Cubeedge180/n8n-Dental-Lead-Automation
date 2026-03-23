@@ -131,8 +131,8 @@ A centralized error handler catches failures across all workflows. When somethin
 
 1. **Clone**
    ```bash
-   git clone https://github.com/Cubeedge180/Dental-Clinic-Automation.git
-   cd Dental-Clinic-Automation
+   git clone https://github.com/Cubeedge180/n8n-Dental-Lead-Automation.git
+   cd n8n-Dental-Lead-Automation
    ```
 
 2. **Configure credentials**
